@@ -1,12 +1,12 @@
-// FeedFence - Background Service Worker (MV3)
+// Quiet - Background Service Worker (MV3)
 // Handles installation, storage initialization, badge updates, and alarms
 
 // Initialize storage on install
 chrome.runtime.onInstalled.addListener(async () => {
-  const data = await chrome.storage.local.get('feedfence');
-  if (!data.feedfence) {
+  const data = await chrome.storage.local.get('quiet');
+  if (!data.quiet) {
     await chrome.storage.local.set({
-      feedfence: {
+      quiet: {
         friendsList: [],
         friendNames: {},
         enabled: true,
@@ -17,12 +17,12 @@ chrome.runtime.onInstalled.addListener(async () => {
   }
   
   // Set up alarm for future friend visiting feature
-  chrome.alarms.create('feedfence-check', { periodInMinutes: 60 });
+  chrome.alarms.create('quiet-check', { periodInMinutes: 60 });
 });
 
 // Listen for stats updates from content script
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.type === 'feedfence:stats') {
+  if (message.type === 'quiet:stats') {
     // Update badge with hidden post count
     const hidden = message.stats?.hidden || 0;
     const text = hidden > 0 ? String(hidden) : '';
@@ -34,8 +34,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 // Alarm handler (placeholder for friend visiting)
 chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === 'feedfence-check') {
-    console.log('[FeedFence] Periodic check alarm fired');
+  if (alarm.name === 'quiet-check') {
+    console.log('[Quiet] Periodic check alarm fired');
     // Future: round-robin friend profile visiting
   }
 });

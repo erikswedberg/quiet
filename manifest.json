@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "FeedFence",
+  "name": "Quiet",
   "version": "0.1.0",
-  "description": "Turn Facebook into an RSS feed. Only see posts from people you actually follow.",
+  "description": "Turn social media into RSS. Only see posts from people you actually know.",
   "permissions": ["storage", "activeTab", "scripting", "alarms", "tabs"],
   "host_permissions": ["*://*.facebook.com/*"],
   "content_scripts": [

@@ -1,4 +1,4 @@
-// FeedFence Popup Controller
+// Quiet Popup Controller
 
 // DOM Elements
 const toggleSwitch = document.getElementById('toggleSwitch');
@@ -23,7 +23,7 @@ let currentFriends = []; // Array of { name, url }
 let isEnabled = true;
 let currentMode = 'friends';
 
-// ─── Facebook tab communication ──────────────────────────────────────
+//  Facebook tab communication 
 
 async function getFacebookTab() {
   const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -38,12 +38,12 @@ async function sendToContent(type, data = {}) {
   try {
     return await chrome.tabs.sendMessage(tab.id, { type, ...data });
   } catch (err) {
-    console.warn('[FeedFence popup] sendMessage failed:', err.message);
+    console.warn('[Quiet popup] sendMessage failed:', err.message);
     return null;
   }
 }
 
-// ─── UI update helpers ───────────────────────────────────────────────
+//  UI update helpers 
 
 function updateStats(data) {
   if (!data) return;
@@ -68,7 +68,7 @@ function updateMode(m) {
   if (map[m]) map[m].classList.add('active');
 }
 
-// ─── Friends list rendering ──────────────────────────────────────────
+//  Friends list rendering 
 
 function renderFriendsList(filter = '') {
   const q = filter.toLowerCase();
@@ -99,9 +99,9 @@ function renderFriendsList(filter = '') {
 
     const removeBtn = document.createElement('button');
     removeBtn.className = 'remove-btn';
-    removeBtn.textContent = '✕';
+    removeBtn.textContent = 'x';
     removeBtn.addEventListener('click', async () => {
-      await sendToContent('feedfence:removeFriend', { url: friend.url });
+      await sendToContent('quiet:removeFriend', { url: friend.url });
       await loadFriends();
     });
 
@@ -112,7 +112,7 @@ function renderFriendsList(filter = '') {
 }
 
 async function loadFriends() {
-  const resp = await sendToContent('feedfence:getFriends');
+  const resp = await sendToContent('quiet:getFriends');
   if (resp?.friends) {
     currentFriends = resp.friends; // [{ name, url }]
     renderFriendsList(searchInput.value);
@@ -120,19 +120,19 @@ async function loadFriends() {
   }
 }
 
-// ─── Event handlers ──────────────────────────────────────────────────
+//  Event handlers 
 
 toggleSwitch.addEventListener('click', async () => {
   const newState = !isEnabled;
   updateStatus(newState);
-  await sendToContent('feedfence:setEnabled', { enabled: newState });
+  await sendToContent('quiet:setEnabled', { enabled: newState });
 });
 
 [modeFriends, modeGroups, modeOff].forEach(btn => {
   btn.addEventListener('click', async () => {
     const m = btn.dataset.mode;
     updateMode(m);
-    await sendToContent('feedfence:setMode', { mode: m });
+    await sendToContent('quiet:setMode', { mode: m });
   });
 });
 
@@ -142,13 +142,13 @@ importFriendsBtn.addEventListener('click', async () => {
   if (!tab?.url?.includes('facebook.com/friends')) {
     // Open friends page first
     await chrome.tabs.create({ url: 'https://www.facebook.com/friends/list' });
-    importFriendsBtn.textContent = '📥 Now scroll down, then click Import again';
+    importFriendsBtn.textContent = 'Now scroll down, then click Import again';
     return;
   }
 
-  importFriendsBtn.textContent = '⏳ Scanning...';
-  await sendToContent('feedfence:importFriends');
-  importFriendsBtn.textContent = '📥 Import Friends';
+  importFriendsBtn.textContent = 'Scanning...';
+  await sendToContent('quiet:importFriends');
+  importFriendsBtn.textContent = 'Import Friends';
   await loadFriends();
 });
 
@@ -165,19 +165,19 @@ searchInput.addEventListener('input', (e) => {
   renderFriendsList(e.target.value);
 });
 
-// ─── Real-time stats updates ─────────────────────────────────────────
+//  Real-time stats updates 
 
 chrome.runtime.onMessage.addListener((msg) => {
-  if (msg.type === 'feedfence:stats') {
+  if (msg.type === 'quiet:stats') {
     updateStats(msg);
   }
 });
 
-// ─── Init ────────────────────────────────────────────────────────────
+//  Init 
 
 async function init() {
   // Try to get stats from the active Facebook tab
-  const resp = await sendToContent('feedfence:getStats');
+  const resp = await sendToContent('quiet:getStats');
   if (resp) {
     updateStats(resp);
     if (resp.enabled !== undefined) updateStatus(resp.enabled);

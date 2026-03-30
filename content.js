@@ -1,5 +1,5 @@
 /**
- * FeedFence - Facebook News Feed Filter
+ * Quiet - Facebook News Feed Filter
  * Content Script
  * 
  * Filters Facebook's news feed to show only posts from friends you care about.
@@ -14,7 +14,7 @@
   // ============================================================================
 
   let friendsList = new Set();        // Profile URL keys: "user:johndoe" or "profile:12345"
-  let friendNames = new Map();        // Lowercase display name → profile URL key
+  let friendNames = new Map();        // Lowercase display name to profile URL key
   let enabled = true;                 // Whether filtering is active
   let mode = 'friends';               // 'friends' | 'groups' | 'off'
   let stats = {                       // Statistics
@@ -24,7 +24,7 @@
   };
   let processedPosts = new WeakSet(); // Track which posts we've already processed
   let savedPosts = [];                // Array of saved post objects
-  const STORAGE_KEY = 'feedfence';    // Key for chrome.storage.local
+  const STORAGE_KEY = 'quiet';    // Key for chrome.storage.local
 
   let observer = null;                // MutationObserver instance
   let saveStateTimeout = null;        // Debounce timer for saving state
@@ -68,7 +68,7 @@
         }
       }
     } catch (error) {
-      console.error('[FeedFence] Failed to load state:', error);
+      console.error('[Quiet] Failed to load state:', error);
     }
   }
 
@@ -92,7 +92,7 @@
       
       await chrome.storage.local.set({ [STORAGE_KEY]: data });
     } catch (error) {
-      console.error('[FeedFence] Failed to save state:', error);
+      console.error('[Quiet] Failed to save state:', error);
     }
   }
 
@@ -439,18 +439,18 @@
     const show = shouldShowPost(postEl);
     
     if (show) {
-      postEl.classList.add('feedfence-shown');
-      postEl.classList.remove('feedfence-hidden');
+      postEl.classList.add('quiet-shown');
+      postEl.classList.remove('quiet-hidden');
       stats.shown++;
       
       // Remove peek bar if it exists
-      const existingPeek = postEl.querySelector('.feedfence-peek');
+      const existingPeek = postEl.querySelector('.quiet-peek');
       if (existingPeek) {
         existingPeek.remove();
       }
     } else {
-      postEl.classList.add('feedfence-hidden');
-      postEl.classList.remove('feedfence-shown');
+      postEl.classList.add('quiet-hidden');
+      postEl.classList.remove('quiet-shown');
       stats.hidden++;
       
       // Inject peek bar
@@ -477,7 +477,7 @@
    */
   function injectPeekBar(postEl) {
     // Don't inject if one already exists
-    if (postEl.querySelector('.feedfence-peek')) {
+    if (postEl.querySelector('.quiet-peek')) {
       return;
     }
     
@@ -487,26 +487,26 @@
     
     // Create peek bar
     const peekBar = document.createElement('div');
-    peekBar.className = 'feedfence-peek';
+    peekBar.className = 'quiet-peek';
     
     const icon = document.createElement('span');
-    icon.className = 'feedfence-peek-icon';
-    icon.textContent = '🛡️';
+    icon.className = 'quiet-peek-icon';
+    icon.textContent = 'Quiet';
     
     const label = document.createElement('span');
-    label.className = 'feedfence-peek-label';
+    label.className = 'quiet-peek-label';
     label.textContent = 'Hidden:';
     
     const authorSpan = document.createElement('span');
-    authorSpan.className = 'feedfence-peek-author';
+    authorSpan.className = 'quiet-peek-author';
     authorSpan.textContent = authorName;
     
     const addButton = document.createElement('button');
-    addButton.className = 'feedfence-peek-add';
-    addButton.textContent = '＋ Add';
+    addButton.className = 'quiet-peek-add';
+    addButton.textContent = '+ Add';
     
     const showButton = document.createElement('button');
-    showButton.className = 'feedfence-peek-show';
+    showButton.className = 'quiet-peek-show';
     showButton.textContent = 'Show once';
     
     // Add button click handler
@@ -524,7 +524,7 @@
     // Show button click handler
     showButton.addEventListener('click', (e) => {
       e.stopPropagation();
-      postEl.classList.remove('feedfence-hidden');
+      postEl.classList.remove('quiet-hidden');
       peekBar.remove();
     });
     
@@ -646,24 +646,24 @@
     }
     
     // Skip if banner already exists
-    if (document.querySelector('.feedfence-profile-banner')) {
+    if (document.querySelector('.quiet-profile-banner')) {
       return;
     }
     
     // Create banner
     const banner = document.createElement('div');
-    banner.className = 'feedfence-profile-banner';
+    banner.className = 'quiet-profile-banner';
     banner.innerHTML = `
-      <div class="feedfence-profile-banner-content">
-        <span class="feedfence-profile-banner-icon">🛡️</span>
-        <span class="feedfence-profile-banner-text">Add <strong>${name}</strong> to FeedFence?</span>
-        <button class="feedfence-profile-banner-add">Add Friend</button>
-        <button class="feedfence-profile-banner-dismiss">Dismiss</button>
+      <div class="quiet-profile-banner-content">
+        <span class="quiet-profile-banner-icon">Quiet</span>
+        <span class="quiet-profile-banner-text">Add <strong>${name}</strong> to Quiet?</span>
+        <button class="quiet-profile-banner-add">Add Friend</button>
+        <button class="quiet-profile-banner-dismiss">Dismiss</button>
       </div>
     `;
     
     // Add button handler
-    const addButton = banner.querySelector('.feedfence-profile-banner-add');
+    const addButton = banner.querySelector('.quiet-profile-banner-add');
     addButton.addEventListener('click', () => {
       friendsList.add(profileUrl);
       friendNames.set(name.toLowerCase(), profileUrl);
@@ -673,7 +673,7 @@
     });
     
     // Dismiss button handler
-    const dismissButton = banner.querySelector('.feedfence-profile-banner-dismiss');
+    const dismissButton = banner.querySelector('.quiet-profile-banner-dismiss');
     dismissButton.addEventListener('click', () => {
       banner.remove();
     });
@@ -813,7 +813,7 @@
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     try {
       switch (message.type) {
-        case 'feedfence:getStats':
+        case 'quiet:getStats':
           sendResponse({
             stats: stats,
             friendsCount: friendsList.size,
@@ -822,21 +822,21 @@
           });
           return true;
         
-        case 'feedfence:setEnabled':
+        case 'quiet:setEnabled':
           enabled = message.enabled;
           saveState();
           reprocessAll();
           sendResponse({ success: true });
           return true;
         
-        case 'feedfence:setMode':
+        case 'quiet:setMode':
           mode = message.mode;
           saveState();
           reprocessAll();
           sendResponse({ success: true });
           return true;
         
-        case 'feedfence:getFriends':
+        case 'quiet:getFriends':
           const friendsArray = Array.from(friendsList).map(url => {
             // Find name for this URL
             let name = '';
@@ -852,7 +852,7 @@
           sendResponse({ friends: friendsArray });
           return true;
         
-        case 'feedfence:removeFriend':
+        case 'quiet:removeFriend':
           const urlToRemove = message.url;
           friendsList.delete(urlToRemove);
           // Remove from friendNames
@@ -866,17 +866,17 @@
           sendResponse({ success: true });
           return true;
         
-        case 'feedfence:getSavedPosts':
+        case 'quiet:getSavedPosts':
           const postsToReturn = savedPosts.slice(0, 200);
           sendResponse({ posts: postsToReturn });
           return true;
         
-        case 'feedfence:importFriends':
+        case 'quiet:importFriends':
           autoImportFriendsFromPage();
           sendResponse({ success: true });
           return true;
         
-        case 'feedfence:addFriend':
+        case 'quiet:addFriend':
           const { name, url } = message;
           if (name && url) {
             friendsList.add(url);
@@ -894,7 +894,7 @@
           return true;
       }
     } catch (error) {
-      console.error('[FeedFence] Message handler error:', error);
+      console.error('[Quiet] Message handler error:', error);
       sendResponse({ error: error.message });
       return true;
     }
@@ -910,14 +910,14 @@
    */
   function showToast(message) {
     // Remove existing toast
-    const existingToast = document.querySelector('.feedfence-toast');
+    const existingToast = document.querySelector('.quiet-toast');
     if (existingToast) {
       existingToast.remove();
     }
     
     // Create new toast
     const toast = document.createElement('div');
-    toast.className = 'feedfence-toast';
+    toast.className = 'quiet-toast';
     toast.textContent = message;
     
     document.body.appendChild(toast);
@@ -938,7 +938,7 @@
   function broadcastStats() {
     try {
       chrome.runtime.sendMessage({
-        type: 'feedfence:stats',
+        type: 'quiet:stats',
         stats: stats
       });
     } catch (error) {
@@ -961,7 +961,7 @@
     stats.hidden = 0;
     
     // Remove all existing peek bars
-    const existingPeeks = document.querySelectorAll('.feedfence-peek');
+    const existingPeeks = document.querySelectorAll('.quiet-peek');
     for (const peek of existingPeeks) {
       peek.remove();
     }
@@ -971,7 +971,7 @@
     for (const feed of feeds) {
       const posts = feed.children;
       for (const post of posts) {
-        post.classList.remove('feedfence-shown', 'feedfence-hidden');
+        post.classList.remove('quiet-shown', 'quiet-hidden');
         processPost(post);
       }
     }
@@ -985,12 +985,12 @@
    * Initialize the content script
    */
   async function init() {
-    console.log('[FeedFence] Initializing...');
+    console.log('[Quiet] Initializing...');
     
     // Load saved state
     await loadState();
     
-    console.log('[FeedFence] State loaded:', {
+    console.log('[Quiet] State loaded:', {
       friends: friendsList.size,
       enabled: enabled,
       mode: mode,
@@ -1017,9 +1017,9 @@
     checkFriendsPage();
     
     // Show activation toast
-    showToast('FeedFence is active! 🛡️');
+    showToast('Quiet is active.');
     
-    console.log('[FeedFence] Initialization complete');
+    console.log('[Quiet] Initialization complete');
   }
 
   // Start the extension

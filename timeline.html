@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>FeedFence Timeline</title>
+  <title>Quiet Timeline</title>
   <style>
     * {
       margin: 0;
@@ -129,8 +129,8 @@
 <body>
   <div class="container">
     <header>
-      <h1>🛡️ FeedFence Timeline</h1>
-      <p class="subtitle">Your friends' posts, in order</p>
+      <h1>Quiet Timeline</h1>
+      <p class="subtitle">Your friends' posts, in order.</p>
     </header>
 
     <input 
@@ -150,8 +150,8 @@
     let allPosts = [];
 
     async function loadTimeline() {
-      const data = await chrome.storage.local.get('feedfence');
-      const savedPosts = data.feedfence?.savedPosts || [];
+      const data = await chrome.storage.local.get('quiet');
+      const savedPosts = data.quiet?.savedPosts || [];
       
       allPosts = savedPosts.sort((a, b) => b.timestamp - a.timestamp);
       displayPosts(allPosts);
@@ -164,9 +164,9 @@
       if (posts.length === 0) {
         timeline.innerHTML = `
           <div class="empty-state">
-            <div class="empty-state-icon">📭</div>
+            <div class="empty-state-icon"></div>
             <div class="empty-state-text">
-              No posts saved yet. Browse Facebook with FeedFence active to start building your timeline.
+              No posts saved yet. Browse Facebook with Quiet active to start building your timeline.
             </div>
           </div>
         `;
@@ -247,7 +247,7 @@
 
     // Listen for storage changes
     chrome.storage.onChanged.addListener((changes, area) => {
-      if (area === 'local' && changes.feedfence) {
+      if (area === 'local' && changes.quiet) {
         loadTimeline();
       }
     });
