@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FeedFence Timeline</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #1a1a2e;
+      color: #e8e8e8;
+      padding: 20px;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+
+    h1 {
+      font-size: 28px;
+      margin-bottom: 8px;
+      color: #fff;
+    }
+
+    .subtitle {
+      font-size: 14px;
+      color: #888;
+    }
+
+    .search-bar {
+      width: 100%;
+      padding: 12px 16px;
+      background: #16213e;
+      border: 1px solid #2d3e5f;
+      border-radius: 8px;
+      color: #e8e8e8;
+      font-size: 14px;
+      margin-bottom: 24px;
+    }
+
+    .search-bar:focus {
+      outline: none;
+      border-color: #4a90e2;
+    }
+
+    .search-bar::placeholder {
+      color: #666;
+    }
+
+    .post-card {
+      background: #16213e;
+      border-radius: 12px;
+      padding: 16px 20px;
+      margin-bottom: 16px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+      transition: transform 0.2s;
+    }
+
+    .post-card:hover {
+      transform: translateY(-2px);
+    }
+
+    .post-author {
+      font-weight: 600;
+      color: #4a90e2;
+      font-size: 15px;
+      margin-bottom: 8px;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-block;
+    }
+
+    .post-author:hover {
+      text-decoration: underline;
+    }
+
+    .post-text {
+      font-size: 14px;
+      line-height: 1.5;
+      color: #e8e8e8;
+      margin-bottom: 12px;
+      word-wrap: break-word;
+    }
+
+    .post-timestamp {
+      font-size: 12px;
+      color: #888;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: #888;
+    }
+
+    .empty-state-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+    }
+
+    .empty-state-text {
+      font-size: 15px;
+      line-height: 1.6;
+      max-width: 400px;
+      margin: 0 auto;
+    }
+
+    .stats {
+      text-align: center;
+      margin-bottom: 20px;
+      font-size: 13px;
+      color: #888;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>🛡️ FeedFence Timeline</h1>
+      <p class="subtitle">Your friends' posts, in order</p>
+    </header>
+
+    <input 
+      type="text" 
+      class="search-bar" 
+      id="searchBar" 
+      placeholder="Search by author or content..."
+    />
+
+    <div class="stats" id="stats"></div>
+
+    <div id="timeline"></div>
+  </div>
+
+  <script>
+    // Load and display timeline
+    let allPosts = [];
+
+    async function loadTimeline() {
+      const data = await chrome.storage.local.get('feedfence');
+      const savedPosts = data.feedfence?.savedPosts || [];
+      
+      allPosts = savedPosts.sort((a, b) => b.timestamp - a.timestamp);
+      displayPosts(allPosts);
+    }
+
+    function displayPosts(posts) {
+      const timeline = document.getElementById('timeline');
+      const stats = document.getElementById('stats');
+      
+      if (posts.length === 0) {
+        timeline.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">📭</div>
+            <div class="empty-state-text">
+              No posts saved yet. Browse Facebook with FeedFence active to start building your timeline.
+            </div>
+          </div>
+        `;
+        stats.textContent = '';
+        return;
+      }
+
+      stats.textContent = `Showing ${posts.length} post${posts.length === 1 ? '' : 's'}`;
+
+      timeline.innerHTML = posts.map(post => {
+        const timestamp = new Date(post.timestamp);
+        const relativeTime = getRelativeTime(timestamp);
+        
+        return `
+          <div class="post-card">
+            <a 
+              href="${authorKeyToUrl(post.authorUrl)}" 
+              class="post-author" 
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              ${escapeHtml(post.authorName || post.author || 'Unknown')}
+            </a>
+            <div class="post-text">${escapeHtml(post.text)}</div>
+            <div class="post-timestamp">${relativeTime}</div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function getRelativeTime(date) {
+      const now = new Date();
+      const diffMs = now - date;
+      const diffMins = Math.floor(diffMs / 60000);
+      const diffHours = Math.floor(diffMs / 3600000);
+      const diffDays = Math.floor(diffMs / 86400000);
+
+      if (diffMins < 1) return 'Just now';
+      if (diffMins < 60) return `${diffMins}m ago`;
+      if (diffHours < 24) return `${diffHours}h ago`;
+      if (diffDays < 7) return `${diffDays}d ago`;
+      
+      return date.toLocaleDateString();
+    }
+
+    function authorKeyToUrl(key) {
+      if (!key) return '#';
+      if (key.startsWith('user:')) return 'https://www.facebook.com/' + key.slice(5);
+      if (key.startsWith('profile:')) return 'https://www.facebook.com/profile.php?id=' + key.slice(8);
+      return '#';
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // Search functionality
+    document.getElementById('searchBar').addEventListener('input', (e) => {
+      const query = e.target.value.toLowerCase();
+      
+      if (!query) {
+        displayPosts(allPosts);
+        return;
+      }
+
+      const filtered = allPosts.filter(post => 
+        (post.authorName || post.author || '').toLowerCase().includes(query) ||
+        post.text.toLowerCase().includes(query)
+      );
+      
+      displayPosts(filtered);
+    });
+
+    // Load on page load
+    loadTimeline();
+
+    // Listen for storage changes
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area === 'local' && changes.feedfence) {
+        loadTimeline();
+      }
+    });
+  </script>
+</body>
+</html>

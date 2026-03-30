@@ -1,0 +1,201 @@
+/* FeedFence - Facebook Feed Filtering Extension */
+/* Injected CSS for hiding/showing posts with peek bars */
+
+/* Hidden posts with peek bar */
+.feedfence-hidden {
+  position: relative !important;
+  max-height: 40px !important;
+  overflow: hidden !important;
+  opacity: 1 !important;
+}
+
+.feedfence-hidden > *:not(.feedfence-peek) {
+  display: none !important;
+}
+
+/* Peek bar */
+.feedfence-peek {
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: #f0f2f5;
+  border-radius: 8px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 13px;
+  color: #65676b;
+  height: 40px;
+  box-sizing: border-box;
+}
+
+.feedfence-peek-icon {
+  font-size: 14px;
+}
+
+.feedfence-peek-label {
+  font-weight: 500;
+}
+
+.feedfence-peek-author {
+  color: #1877f2;
+  font-weight: 500;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.feedfence-peek-add,
+.feedfence-peek-show {
+  border: none;
+  border-radius: 4px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.feedfence-peek-add {
+  background: #1877f2;
+  color: white;
+}
+
+.feedfence-peek-add:hover {
+  background: #166fe5;
+}
+
+.feedfence-peek-show {
+  background: #e4e6eb;
+  color: #050505;
+}
+
+.feedfence-peek-show:hover {
+  background: #d8dadf;
+}
+
+/* Shown posts (subtle indicator) */
+.feedfence-shown {
+  border-left: 2px solid transparent !important;
+  transition: border-color 0.3s;
+}
+
+/* Profile page banner */
+.feedfence-profile-banner,
+.feedfence-profile-add {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 10px 20px;
+  background: #1877f2;
+  color: white;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 14px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+
+.feedfence-profile-add strong {
+  font-weight: 600;
+}
+
+.feedfence-profile-add-btn {
+  background: white;
+  color: #1877f2;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 16px;
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.feedfence-profile-dismiss-btn {
+  background: transparent;
+  color: white;
+  border: 1px solid rgba(255,255,255,0.5);
+  border-radius: 6px;
+  padding: 6px 16px;
+  font-weight: 500;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+/* Toast notifications */
+.feedfence-toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 999999;
+  padding: 12px 20px;
+  background: #1a1a2e;
+  color: white;
+  border-radius: 8px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 14px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  animation: feedfence-toast-in 0.3s ease-out;
+  max-width: 400px;
+}
+
+@keyframes feedfence-toast-in {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* Profile banner inner content */
+.feedfence-profile-banner-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.feedfence-profile-banner-icon {
+  font-size: 16px;
+}
+
+.feedfence-profile-banner-text {
+  font-size: 14px;
+}
+
+.feedfence-profile-banner-add {
+  background: white;
+  color: #1877f2;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 16px;
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.feedfence-profile-banner-add:hover {
+  background: #e8e8e8;
+}
+
+.feedfence-profile-banner-dismiss {
+  background: transparent;
+  color: white;
+  border: 1px solid rgba(255,255,255,0.5);
+  border-radius: 6px;
+  padding: 6px 16px;
+  font-weight: 500;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.feedfence-profile-banner-dismiss:hover {
+  border-color: white;
+}

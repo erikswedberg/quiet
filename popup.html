@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FeedFence</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      min-width: 360px;
+      background: #1a1a2e;
+      color: #eee;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 14px;
+      padding: 16px;
+    }
+
+    /* Header */
+    .header {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    .header h1 {
+      font-size: 24px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .header .subtitle {
+      font-size: 12px;
+      color: #888;
+    }
+
+    /* Sections */
+    .section {
+      background: #16213e;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+
+    /* Status Bar */
+    .status-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .status-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 500;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #888;
+    }
+
+    .status-dot.active {
+      background: #00c853;
+    }
+
+    /* Toggle Switch */
+    .toggle-switch {
+      position: relative;
+      width: 48px;
+      height: 24px;
+      background: #0f3460;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+
+    .toggle-switch.active {
+      background: #00c853;
+    }
+
+    .toggle-switch::after {
+      content: '';
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 20px;
+      height: 20px;
+      background: white;
+      border-radius: 50%;
+      transition: left 0.3s;
+    }
+
+    .toggle-switch.active::after {
+      left: 26px;
+    }
+
+    /* Stats Panel */
+    .stats-panel {
+      display: flex;
+      gap: 8px;
+    }
+
+    .stat-box {
+      flex: 1;
+      background: #0f3460;
+      border-radius: 6px;
+      padding: 12px;
+      text-align: center;
+    }
+
+    .stat-label {
+      font-size: 11px;
+      color: #888;
+      margin-bottom: 4px;
+      text-transform: uppercase;
+    }
+
+    .stat-value {
+      font-size: 20px;
+      font-weight: 600;
+    }
+
+    .stat-value.green { color: #00c853; }
+    .stat-value.red { color: #ff5252; }
+    .stat-value.blue { color: #4fc3f7; }
+
+    /* Mode Selector */
+    .mode-selector {
+      display: flex;
+      gap: 6px;
+    }
+
+    .mode-btn {
+      flex: 1;
+      background: #0f3460;
+      border: none;
+      color: #eee;
+      padding: 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      transition: background 0.2s;
+    }
+
+    .mode-btn:hover {
+      background: #1a4d7a;
+    }
+
+    .mode-btn.active {
+      background: #e94560;
+      color: white;
+    }
+
+    /* Quick Actions */
+    .quick-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .action-btn {
+      background: #0f3460;
+      border: none;
+      color: #eee;
+      padding: 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      transition: background 0.2s;
+      text-align: left;
+    }
+
+    .action-btn:hover {
+      background: #1a4d7a;
+    }
+
+    .action-btn.primary {
+      background: #e94560;
+      color: white;
+    }
+
+    .action-btn.primary:hover {
+      background: #d13751;
+    }
+
+    /* Friends List */
+    .friends-list-container {
+      display: none;
+    }
+
+    .friends-list-container.visible {
+      display: block;
+    }
+
+    .friends-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .friends-count {
+      font-size: 12px;
+      color: #888;
+    }
+
+    .search-input {
+      width: 100%;
+      background: #0f3460;
+      border: 1px solid #1a4d7a;
+      color: #eee;
+      padding: 8px;
+      border-radius: 6px;
+      font-size: 13px;
+      margin-bottom: 10px;
+    }
+
+    .search-input:focus {
+      outline: none;
+      border-color: #e94560;
+    }
+
+    .friends-list {
+      max-height: 300px;
+      overflow-y: auto;
+    }
+
+    .friend-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px;
+      background: #0f3460;
+      border-radius: 4px;
+      margin-bottom: 4px;
+    }
+
+    .friend-name {
+      font-size: 13px;
+    }
+
+    .remove-btn {
+      background: none;
+      border: none;
+      color: #ff5252;
+      cursor: pointer;
+      font-size: 16px;
+      padding: 0 4px;
+      line-height: 1;
+    }
+
+    .remove-btn:hover {
+      color: #ff1744;
+    }
+
+    /* Scrollbar */
+    .friends-list::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .friends-list::-webkit-scrollbar-track {
+      background: #0f3460;
+      border-radius: 3px;
+    }
+
+    .friends-list::-webkit-scrollbar-thumb {
+      background: #1a4d7a;
+      border-radius: 3px;
+    }
+
+    /* Footer */
+    .footer {
+      text-align: center;
+      font-size: 11px;
+      color: #888;
+      margin-top: 16px;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+  <!-- Header -->
+  <div class="header">
+    <h1>🛡️ FeedFence</h1>
+    <div class="subtitle">Your feed. Your friends. No algorithm.</div>
+  </div>
+
+  <!-- Status Bar -->
+  <div class="section status-bar">
+    <div class="status-label">
+      <span class="status-dot" id="statusDot"></span>
+      <span id="statusText">Paused</span>
+    </div>
+    <div class="toggle-switch" id="toggleSwitch"></div>
+  </div>
+
+  <!-- Stats Panel -->
+  <div class="section stats-panel">
+    <div class="stat-box">
+      <div class="stat-label">Shown</div>
+      <div class="stat-value green" id="statShown">0</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-label">Hidden</div>
+      <div class="stat-value red" id="statHidden">0</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-label">Friends</div>
+      <div class="stat-value blue" id="statFriends">0</div>
+    </div>
+  </div>
+
+  <!-- Mode Selector -->
+  <div class="section mode-selector">
+    <button class="mode-btn active" id="modeFriends" data-mode="friends">Friends</button>
+    <button class="mode-btn" id="modeGroups" data-mode="groups">Groups</button>
+    <button class="mode-btn" id="modeOff" data-mode="off">Off</button>
+  </div>
+
+  <!-- Quick Actions -->
+  <div class="section quick-actions">
+    <button class="action-btn primary" id="importFriendsBtn">📥 Import Friends</button>
+    <button class="action-btn" id="viewTimelineBtn">📊 View Timeline</button>
+    <button class="action-btn" id="manageFriendsBtn">👥 Manage Friends</button>
+  </div>
+
+  <!-- Friends List (hidden by default) -->
+  <div class="section friends-list-container" id="friendsListContainer">
+    <div class="friends-header">
+      <strong>Friends List</strong>
+      <span class="friends-count" id="friendsCount">0 friends</span>
+    </div>
+    <input type="text" class="search-input" id="searchInput" placeholder="Search friends...">
+    <div class="friends-list" id="friendsList">
+      <!-- Friends will be populated here -->
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    v0.1.0 • Posts are filtered client-side. Nothing leaves your browser.
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
