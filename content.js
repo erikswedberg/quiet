@@ -613,25 +613,23 @@
       return;
     }
     
-    showToast('Starting auto-import from Friends page...');
+    showToast('Scanning for friends...');
     
-    let totalImported = 0;
     let intervalCount = 0;
     const maxIntervals = 30; // 30 intervals * 2s = 60 seconds
     
     const importInterval = setInterval(() => {
       const newCount = checkFriendsPage();
-      totalImported += newCount;
       intervalCount++;
       
       if (newCount > 0) {
-        showToast(`Imported ${totalImported} friends so far...`);
+        showToast(friendsList.size + ' friends total. Keep scrolling.');
       }
       
       // Stop after 60 seconds
       if (intervalCount >= maxIntervals) {
         clearInterval(importInterval);
-        showToast(`Auto-import complete! Imported ${totalImported} friends.`);
+        showToast('Import done. ' + friendsList.size + ' friends.');
       }
     }, 2000);
   }
@@ -827,7 +825,7 @@
       if (window.location.pathname.includes('/friends/list')) {
         const found = checkFriendsPage();
         if (found > 0) {
-          showToast('Quiet found ' + friendsList.size + ' friends so far. Keep scrolling.');
+          showToast(friendsList.size + ' friends total.');
         }
       }
     }, 3000);
