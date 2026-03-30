@@ -556,44 +556,62 @@
     }
     
     let count = 0;
-    // On /friends/list, each friend is a link with a profile photo and name.
-    // Look for links that have an img (profile photo) and text content (the name).
-    // Also try svg[aria-label] as a fallback.
-    const links = document.querySelectorAll('a[role="link"]');
-    
-    for (const link of links) {
+
+    // Scan every link on the page that points to a profile.
+    // The friends/list page has rows with profile photos and names.
+    // The DOM structure varies so we try multiple approaches.
+    const allLinks = document.querySelectorAll('a[href]');
+
+    for (const link of allLinks) {
       const href = link.getAttribute('href');
       if (!href) continue;
-      
+
       const profileUrl = normalizeProfileUrl(href);
       if (!profileUrl || friendsList.has(profileUrl)) continue;
-      
-      // Must contain a profile photo (img or svg)
-      const hasPhoto = link.querySelector('img') || link.querySelector('svg[aria-label]');
-      if (!hasPhoto) continue;
-      
-      // Get name: try svg aria-label first, then link's own aria-label,
-      // then the visible text (excluding "mutual friends" type subtexts)
+
+      // Try to get a name from this link or its surroundings
       let name = null;
-      const svg = link.querySelector('svg[aria-label]');
-      if (svg) {
-        name = svg.getAttribute('aria-label');
-      }
+
+      // 1. aria-label on the link itself
+      name = link.getAttribute('aria-label');
+
+      // 2. aria-label on an svg inside the link (profile avatar)
       if (!name) {
-        name = link.getAttribute('aria-label');
+        const svg = link.querySelector('svg[aria-label]');
+        if (svg) name = svg.getAttribute('aria-label');
       }
+
+      // 3. Direct text content of the link (if short enough to be a name)
       if (!name) {
-        // Get the first span with short text (the name, not "X mutual friends")
-        const spans = link.querySelectorAll('span');
-        for (const span of spans) {
-          const text = span.textContent.trim();
-          if (text && text.length > 1 && text.length < 80 && !text.includes('mutual friend')) {
-            name = text;
-            break;
+        const text = link.textContent.trim();
+        if (text.length > 1 && text.length < 80 &&
+            !text.includes('mutual friend') &&
+            !text.includes('Add Friend') &&
+            !text.includes('Follow')) {
+          name = text;
+        }
+      }
+
+      // 4. Look at the parent row for a name in a sibling or nearby element
+      if (!name) {
+        const row = link.closest('[data-visualcompletion]') || link.parentElement?.parentElement;
+        if (row) {
+          const spans = row.querySelectorAll('span');
+          for (const span of spans) {
+            const text = span.textContent.trim();
+            if (text.length > 1 && text.length < 80 &&
+                !text.includes('mutual friend') &&
+                !text.includes('Add Friend') &&
+                !text.includes('Follow') &&
+                !text.includes('Search') &&
+                !text.includes('friends')) {
+              name = text;
+              break;
+            }
           }
         }
       }
-      
+
       if (name && name.length > 1 && name.length < 80) {
         friendsList.add(profileUrl);
         friendNames.set(name.toLowerCase(), profileUrl);
@@ -824,8 +842,16 @@
         }
       }
       
-      // Check if on profile page
+      // Check if on profile or friends page
       checkProfilePage();
+
+      // Auto-scan friends list page on scroll
+      if (window.location.pathname.includes('/friends/list')) {
+        const found = checkFriendsPage();
+        if (found > 0) {
+          showToast('Quiet found ' + friendsList.size + ' friends so far. Keep scrolling.');
+        }
+      }
     }, 3000);
   }
 
