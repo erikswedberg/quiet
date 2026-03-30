@@ -139,8 +139,7 @@ toggleSwitch.addEventListener('click', async () => {
 importFriendsBtn.addEventListener('click', async () => {
   const tab = await getFacebookTab();
 
-  if (!tab?.url?.includes('facebook.com/friends')) {
-    // Open friends page first
+  if (!tab?.url?.includes('facebook.com/friends/list')) {
     await chrome.tabs.create({ url: 'https://www.facebook.com/friends/list' });
     importFriendsBtn.textContent = 'Now scroll down, then click Import again';
     return;

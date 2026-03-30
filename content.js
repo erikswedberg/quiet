@@ -550,28 +550,54 @@
    * @returns {number} - Number of friends found
    */
   function checkFriendsPage() {
-    // Only run on friends page
-    if (!window.location.pathname.includes('/friends')) {
+    // Only run on the actual friends list page, not /friends (which is requests)
+    if (!window.location.pathname.includes('/friends/list')) {
       return 0;
     }
     
     let count = 0;
+    // On /friends/list, each friend is a link with a profile photo and name.
+    // Look for links that have an img (profile photo) and text content (the name).
+    // Also try svg[aria-label] as a fallback.
     const links = document.querySelectorAll('a[role="link"]');
     
     for (const link of links) {
-      const svg = link.querySelector('svg[aria-label]');
-      if (!svg) continue;
-      
-      const name = svg.getAttribute('aria-label');
       const href = link.getAttribute('href');
+      if (!href) continue;
       
-      if (name && href) {
-        const profileUrl = normalizeProfileUrl(href);
-        if (profileUrl && !friendsList.has(profileUrl)) {
-          friendsList.add(profileUrl);
-          friendNames.set(name.toLowerCase(), profileUrl);
-          count++;
+      const profileUrl = normalizeProfileUrl(href);
+      if (!profileUrl || friendsList.has(profileUrl)) continue;
+      
+      // Must contain a profile photo (img or svg)
+      const hasPhoto = link.querySelector('img') || link.querySelector('svg[aria-label]');
+      if (!hasPhoto) continue;
+      
+      // Get name: try svg aria-label first, then link's own aria-label,
+      // then the visible text (excluding "mutual friends" type subtexts)
+      let name = null;
+      const svg = link.querySelector('svg[aria-label]');
+      if (svg) {
+        name = svg.getAttribute('aria-label');
+      }
+      if (!name) {
+        name = link.getAttribute('aria-label');
+      }
+      if (!name) {
+        // Get the first span with short text (the name, not "X mutual friends")
+        const spans = link.querySelectorAll('span');
+        for (const span of spans) {
+          const text = span.textContent.trim();
+          if (text && text.length > 1 && text.length < 80 && !text.includes('mutual friend')) {
+            name = text;
+            break;
+          }
         }
+      }
+      
+      if (name && name.length > 1 && name.length < 80) {
+        friendsList.add(profileUrl);
+        friendNames.set(name.toLowerCase(), profileUrl);
+        count++;
       }
     }
     
@@ -586,8 +612,8 @@
    * Auto-import friends from the friends page with progress updates
    */
   function autoImportFriendsFromPage() {
-    if (!window.location.pathname.includes('/friends')) {
-      showToast('Please navigate to your Friends page first');
+    if (!window.location.pathname.includes('/friends/list')) {
+      showToast('Please navigate to facebook.com/friends/list first');
       return;
     }
     
