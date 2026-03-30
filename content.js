@@ -394,20 +394,7 @@
     
     // Mode-based filtering
     if (mode === 'friends') {
-      // Check if author is in friends list
-      if (friendsList.has(author.profileUrl)) {
-        return true;
-      }
-      
-      // Check if author name matches any friend name
-      const lowerName = author.name.toLowerCase();
-      for (const [name, url] of friendNames.entries()) {
-        if (name === lowerName) {
-          return true;
-        }
-      }
-      
-      return false;
+      return friendsList.has(author.profileUrl);
     } else if (mode === 'groups') {
       return isGroupPost(postEl);
     } else if (mode === 'off') {
