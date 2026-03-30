@@ -557,66 +557,44 @@
     
     let count = 0;
 
-    // Scan every link on the page that points to a profile.
-    // The friends/list page has rows with profile photos and names.
-    // The DOM structure varies so we try multiple approaches.
-    const allLinks = document.querySelectorAll('a[href]');
+    // Each friend row on /friends/list is:
+    //   div[data-visualcompletion="ignore-dynamic"]
+    //     > a[role="link"][href="https://www.facebook.com/username"]
+    //       > div > div > (svg with profile photo) + (div with name)
+    // The name lives in the first span[dir="auto"] inside the link.
+    const rows = document.querySelectorAll('div[data-visualcompletion="ignore-dynamic"]');
+    console.log('[Quiet] Scanning ' + rows.length + ' rows on friends/list');
 
-    for (const link of allLinks) {
+    for (const row of rows) {
+      const link = row.querySelector('a[role="link"]');
+      if (!link) continue;
+
       const href = link.getAttribute('href');
       if (!href) continue;
 
       const profileUrl = normalizeProfileUrl(href);
       if (!profileUrl || friendsList.has(profileUrl)) continue;
 
-      // Try to get a name from this link or its surroundings
-      let name = null;
+      // The name is in the first span[dir="auto"] inside the link.
+      // Its direct text (via innermost span) is the person's name.
+      const nameSpan = link.querySelector('span[dir="auto"]');
+      if (!nameSpan) continue;
 
-      // 1. aria-label on the link itself
-      name = link.getAttribute('aria-label');
-
-      // 2. aria-label on an svg inside the link (profile avatar)
-      if (!name) {
-        const svg = link.querySelector('svg[aria-label]');
-        if (svg) name = svg.getAttribute('aria-label');
+      // Get the deepest text - walk to the innermost span
+      let nameEl = nameSpan;
+      while (nameEl.querySelector('span')) {
+        nameEl = nameEl.querySelector('span');
       }
+      const name = nameEl.textContent.trim();
 
-      // 3. Direct text content of the link (if short enough to be a name)
-      if (!name) {
-        const text = link.textContent.trim();
-        if (text.length > 1 && text.length < 80 &&
-            !text.includes('mutual friend') &&
-            !text.includes('Add Friend') &&
-            !text.includes('Follow')) {
-          name = text;
-        }
-      }
+      if (!name || name.length < 2 || name.length > 80) continue;
+      // Skip if this is "X mutual friends" or other non-name text
+      if (name.includes('mutual friend')) continue;
 
-      // 4. Look at the parent row for a name in a sibling or nearby element
-      if (!name) {
-        const row = link.closest('[data-visualcompletion]') || link.parentElement?.parentElement;
-        if (row) {
-          const spans = row.querySelectorAll('span');
-          for (const span of spans) {
-            const text = span.textContent.trim();
-            if (text.length > 1 && text.length < 80 &&
-                !text.includes('mutual friend') &&
-                !text.includes('Add Friend') &&
-                !text.includes('Follow') &&
-                !text.includes('Search') &&
-                !text.includes('friends')) {
-              name = text;
-              break;
-            }
-          }
-        }
-      }
-
-      if (name && name.length > 1 && name.length < 80) {
-        friendsList.add(profileUrl);
-        friendNames.set(name.toLowerCase(), profileUrl);
-        count++;
-      }
+      friendsList.add(profileUrl);
+      friendNames.set(name.toLowerCase(), profileUrl);
+      count++;
+      console.log('[Quiet] Found friend: ' + name + ' -> ' + profileUrl);
     }
     
     if (count > 0) {
