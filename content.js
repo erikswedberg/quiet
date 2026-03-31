@@ -299,32 +299,19 @@
     // Check links first -- Facebook wraps "Sponsored" in a link to /ads/about
     const adLinks = postEl.querySelectorAll('a[href*="ads/about"], a[href*="ad_preferences"]');
     if (adLinks.length > 0) return true;
-    // Also check for the exact text "Sponsored" in small leaf-ish spans
+    // Also check for the exact text "Sponsored" in leaf spans/links
     const els = postEl.querySelectorAll('span, a');
     for (const el of els) {
-      // Only check elements whose own text (not children's) is short
       const text = el.textContent.trim();
       if (text === 'Sponsored') return true;
-      // Sometimes it's "Sponsored · " with a globe icon
-      if (text.startsWith('Sponsored') && text.length < 20) return true;
     }
-    // CTA buttons: "Learn more", "Shop now", "Sign up", "Install now", etc.
-    const links = postEl.querySelectorAll('a[role="link"], div[role="button"]');
-    const ctaPatterns = ['Learn more', 'Shop now', 'Sign up', 'Install now', 'Book now', 'Get offer', 'Download', 'Apply now', 'Contact us', 'Get quote', 'Subscribe'];
+    // CTA buttons that only appear in ads (conservative list)
+    const links = postEl.querySelectorAll('a[role="link"]');
+    const ctaPatterns = ['Learn more', 'Shop now', 'Sign up', 'Install now', 'Book now', 'Get offer', 'Apply now', 'Get quote'];
     for (const link of links) {
       const text = link.textContent.trim();
       for (const cta of ctaPatterns) {
         if (text === cta) return true;
-      }
-    }
-    // External site domain shown below the post (e.g. "gofastcampers.com")
-    // Ads show the destination domain + a CTA button like "Learn more"
-    const footerSpans = postEl.querySelectorAll('span');
-    for (const span of footerSpans) {
-      const text = span.textContent.trim();
-      // Looks like a domain name: at least 4 chars, common TLDs
-      if (/^[a-z0-9][a-z0-9-]*\.(com|org|net|io|co|store|shop|biz|us|uk|ca|de|app|dev|xyz)$/i.test(text)) {
-        return true;
       }
     }
     return false;
@@ -708,13 +695,28 @@
 
   function findPostContainer(el) {
     let node = el;
-    // Walk up looking for data-virtualized or a reasonable boundary
+    let candidate = null;
+    // Walk up looking for data-virtualized, but pick the INNERMOST one
+    // that's a reasonable post size (not a page-level wrapper)
     while (node && node !== document.body) {
       if (node.getAttribute && node.getAttribute('data-virtualized') === 'false') {
-        return node;
+        candidate = node;
+        break;
       }
       node = node.parentElement;
     }
+    if (candidate) {
+      // Sanity check: a post container should not be enormous.
+      // If it contains more than a handful of data-virtualized children,
+      // it's a feed wrapper, not a single post.
+      const virtChildren = candidate.querySelectorAll('[data-virtualized]');
+      if (virtChildren.length > 3) {
+        // This is a feed-level container, not a post. Reject it.
+        candidate = null;
+      }
+    }
+    if (candidate) return candidate;
+    
     // Fallback: walk up from the avatar link to find a container that has
     // Like/Comment/Share buttons, meaning it wraps a full post
     node = el;
