@@ -131,9 +131,18 @@
         }
       }
       
+      // Handle /stories/NUMERIC_ID/... -- avatar links to stories when user has active story
+      if (url.pathname.startsWith('/stories/')) {
+        const storyParts = url.pathname.split('/').filter(p => p.length > 0);
+        // /stories/NUMERIC_ID/...
+        if (storyParts.length >= 2 && /^\d+$/.test(storyParts[1])) {
+          return `profile:${storyParts[1]}`;
+        }
+      }
+      
       // Skip certain paths that aren't profiles
       const skipPaths = [
-        '/stories', '/watch', '/marketplace', '/groups', '/events',
+        '/watch', '/marketplace', '/groups', '/events',
         '/pages', '/gaming', '/reel', '/share', '/photo', '/permalink',
         '/posts', '/videos', '/hashtag', '/settings', '/notifications',
         '/messages', '/bookmarks', '/memories'
@@ -350,7 +359,7 @@
     // "Follow" link in the post header indicates a page/profile you don't follow.
     // Facebook shows " · Follow" right next to the author name for unfollowed pages.
     // Check for a[role="link"] or span containing exactly "Follow" near the top of the post.
-    const links = postEl.querySelectorAll('a[role="link"], span[role="link"]');
+    const links = postEl.querySelectorAll('a[role="link"], span[role="link"], div[role="button"]');
     for (const link of links) {
       const text = link.textContent.trim();
       if (text === 'Follow') {
@@ -674,6 +683,29 @@
    * The post boundary is the div with data-virtualized="false", or if not found,
    * a high-level div that contains the Like/Comment/Share buttons.
    */
+  function findProfileLinkInHeader(container, authorName) {
+    // Look for a[role="link"] that links to a profile (not stories/photos/etc)
+    // and whose text matches the author name
+    const links = container.querySelectorAll('a[role="link"]');
+    for (const link of links) {
+      const href = link.getAttribute('href');
+      if (!href) continue;
+      const normalized = normalizeProfileUrl(href);
+      if (!normalized) continue;
+      // Prefer links whose visible text matches the author name
+      const text = link.textContent.trim();
+      if (text === authorName) return normalized;
+    }
+    // If no exact name match, return the first valid profile link
+    for (const link of links) {
+      const href = link.getAttribute('href');
+      if (!href) continue;
+      const normalized = normalizeProfileUrl(href);
+      if (normalized && normalized.startsWith('user:')) return normalized;
+    }
+    return null;
+  }
+
   function findPostContainer(el) {
     let node = el;
     // Walk up looking for data-virtualized or a reasonable boundary
@@ -707,8 +739,12 @@
     const avatars = document.querySelectorAll('svg[role="img"][aria-label]');
     
     for (const svg of avatars) {
-      const name = svg.getAttribute('aria-label');
+      let name = svg.getAttribute('aria-label');
       if (!name || name.length < 2 || name.length > 80) continue;
+      
+      // Strip ", view story" suffix that Facebook adds when user has active stories
+      name = name.replace(/, view story$/i, '').trim();
+      if (!name) continue;
       
       // The svg is inside an a[role="link"] that links to the profile
       const link = svg.closest('a[role="link"]');
@@ -717,12 +753,21 @@
       const href = link.getAttribute('href');
       if (!href) continue;
       
-      const profileUrl = normalizeProfileUrl(href);
-      if (!profileUrl) continue;
-      
-      // Find the post container
+      // Find the post container first (needed for fallback profile link search too)
       const container = findPostContainer(svg);
       if (!container) continue;
+      
+      let profileUrl = normalizeProfileUrl(href);
+      
+      // If the avatar links to /stories/, we got a profile:ID from the story URL.
+      // But the user's friend list stores user:username keys.
+      // Try to find a direct profile link nearby in the post header for a better match.
+      if (!profileUrl || profileUrl.startsWith('profile:')) {
+        const betterUrl = findProfileLinkInHeader(container, name);
+        if (betterUrl) profileUrl = betterUrl;
+      }
+      
+      if (!profileUrl) continue;
       
       // Skip if already processed
       if (processedPosts.has(container)) continue;
