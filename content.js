@@ -734,12 +734,13 @@
       node = node.parentElement;
     }
     if (candidate) {
-      // Sanity check: a post container should not be enormous.
-      // If it contains more than a handful of data-virtualized children,
-      // it's a feed wrapper, not a single post.
+      // Sanity check: reject feed-level wrappers
       const virtChildren = candidate.querySelectorAll('[data-virtualized]');
       if (virtChildren.length > 3) {
-        // This is a feed-level container, not a post. Reject it.
+        candidate = null;
+      }
+      // Must look like a post (has Like/Comment interaction buttons)
+      if (candidate && !candidate.querySelector('[aria-label="Like"]')) {
         candidate = null;
       }
     }
@@ -785,7 +786,10 @@
       
       // Find the post container first (needed for fallback profile link search too)
       const container = findPostContainer(svg);
-      if (!container) continue;
+      if (!container) {
+        console.log('[Quiet] No container for:', name, href.substring(0, 60));
+        continue;
+      }
       
       let profileUrl = normalizeProfileUrl(href);
       
@@ -797,11 +801,16 @@
         if (betterUrl) profileUrl = betterUrl;
       }
       
-      if (!profileUrl) continue;
+      if (!profileUrl) {
+        console.log('[Quiet] No profileUrl for:', name, href.substring(0, 60));
+        continue;
+      }
       
       // Skip if already processed
       if (processedPosts.has(container)) continue;
       
+      const isFriend = friendsList.has(profileUrl);
+      console.log('[Quiet] Post:', name, '->', profileUrl, isFriend ? 'FRIEND' : 'not friend');
       results.push({ container, authorName: name, profileUrl });
     }
     
