@@ -281,97 +281,6 @@
     return null;
   }
 
-  // ============================================================================
-  // POST CLASSIFICATION
-  // ============================================================================
-
-  /**
-   * Check if a post is sponsored
-   * @param {Element} postEl - The post element
-   * @returns {boolean}
-   */
-  function isSponsored(postEl) {
-    // Any data-ad-rendering-role attribute is an ad marker
-    if (postEl.querySelector('[data-ad-rendering-role]')) return true;
-    // Links to external sites via l.facebook.com redirect (ad click-throughs)
-    if (postEl.querySelector('a[href*="l.facebook.com/l.php"]')) return true;
-    // "Sponsored" text as a visible label (can be in span or a)
-    // Check links first -- Facebook wraps "Sponsored" in a link to /ads/about
-    const adLinks = postEl.querySelectorAll('a[href*="ads/about"], a[href*="ad_preferences"]');
-    if (adLinks.length > 0) return true;
-    // Also check for the exact text "Sponsored" in leaf spans/links
-    const els = postEl.querySelectorAll('span, a');
-    for (const el of els) {
-      const text = el.textContent.trim();
-      if (text === 'Sponsored') return true;
-    }
-    // CTA buttons that only appear in ads (conservative list)
-    const links = postEl.querySelectorAll('a[role="link"]');
-    const ctaPatterns = ['Learn more', 'Shop now', 'Sign up', 'Install now', 'Book now', 'Get offer', 'Apply now', 'Get quote'];
-    for (const link of links) {
-      const text = link.textContent.trim();
-      for (const cta of ctaPatterns) {
-        if (text === cta) return true;
-      }
-    }
-    return false;
-  }
-
-  /**
-   * Check if a post is suggested content
-   * @param {Element} postEl - The post element
-   * @returns {boolean}
-   */
-  function isSuggested(postEl) {
-    // Explicit "Suggested for you" type labels
-    const suggestedPhrases = [
-      'Suggested for you',
-      'People you may know',
-      'Reels and short videos',
-      'Join this group',
-      'Popular near you',
-      'Related discussions'
-    ];
-    
-    const spans = postEl.querySelectorAll('span');
-    for (const span of spans) {
-      const text = span.textContent.trim();
-      for (const phrase of suggestedPhrases) {
-        if (text === phrase) {
-          return true;
-        }
-      }
-    }
-    
-    // "Follow" link in the post header indicates a page/profile you don't follow.
-    // Facebook shows " · Follow" right next to the author name for unfollowed pages.
-    // Check for a[role="link"] or span containing exactly "Follow" near the top of the post.
-    const links = postEl.querySelectorAll('a[role="link"], span[role="link"], div[role="button"]');
-    for (const link of links) {
-      const text = link.textContent.trim();
-      if (text === 'Follow') {
-        // Make sure it's in the header area (near the avatar), not in a comment or reaction
-        const linkRect = link.getBoundingClientRect();
-        const avatar = postEl.querySelector('svg[role="img"][aria-label]');
-        if (avatar) {
-          const avatarRect = avatar.getBoundingClientRect();
-          // "Follow" should be within ~150px vertically of the avatar (in the header)
-          if (Math.abs(linkRect.top - avatarRect.top) < 150) {
-            return true;
-          }
-        }
-        // Fallback: if there's no avatar found, still flag it if it looks like a header Follow
-        // The Follow link in headers is typically near the top of the post
-        const postRect = postEl.getBoundingClientRect();
-        if (linkRect.top - postRect.top < 200) {
-          return true;
-        }
-      }
-    }
-    
-    return false;
-  }
-
   /**
    * Check if a post is from a group
    * @param {Element} postEl - The post element
@@ -832,15 +741,8 @@
       stats.total++;
       
       const isFriend = friendsList.has(profileUrl);
-      const sponsored = isSponsored(container);
-      const suggested = isSuggested(container);
       
-      if (sponsored || suggested) {
-        container.classList.add('quiet-hidden');
-        container.classList.remove('quiet-shown');
-        stats.hidden++;
-        injectPeekBar(container, 'Sponsored/Suggested', null);
-      } else if (mode === 'friends' && !isFriend) {
+      if (mode === 'friends' && !isFriend) {
         container.classList.add('quiet-hidden');
         container.classList.remove('quiet-shown');
         stats.hidden++;
