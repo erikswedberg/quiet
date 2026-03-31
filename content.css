@@ -1,84 +1,28 @@
 /* Quiet - Facebook Feed Filtering Extension */
-/* Injected CSS for hiding/showing posts with peek bars */
 
-/* Hidden posts with peek bar */
-.quiet-hidden {
-  position: relative !important;
-  max-height: 40px !important;
-  overflow: hidden !important;
-  opacity: 1 !important;
-}
-
-.quiet-hidden > *:not(.quiet-peek) {
+/* ---- View mode: friends (default) ---- */
+body.quiet-view-friends .quiet-group,
+body.quiet-view-friends .quiet-other {
   display: none !important;
 }
 
-/* Peek bar */
-.quiet-peek {
-  display: flex !important;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
-  background: #f0f2f5;
-  border-radius: 8px;
+/* ---- View mode: groups ---- */
+body.quiet-view-groups .quiet-friend,
+body.quiet-view-groups .quiet-other {
+  display: none !important;
+}
+
+/* ---- View mode: off (show everything) ---- */
+
+/* Share label */
+.quiet-share-label {
+  padding: 6px 16px;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   font-size: 13px;
   color: #65676b;
-  height: 40px;
-  box-sizing: border-box;
 }
 
-.quiet-peek-icon {
-  font-size: 14px;
-}
 
-.quiet-peek-label {
-  font-weight: 500;
-}
-
-.quiet-peek-author {
-  color: #1877f2;
-  font-weight: 500;
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.quiet-peek-add,
-.quiet-peek-show {
-  border: none;
-  border-radius: 4px;
-  padding: 4px 10px;
-  font-size: 12px;
-  cursor: pointer;
-  font-weight: 500;
-  white-space: nowrap;
-}
-
-.quiet-peek-add {
-  background: #1877f2;
-  color: white;
-}
-
-.quiet-peek-add:hover {
-  background: #166fe5;
-}
-
-.quiet-peek-show {
-  background: #e4e6eb;
-  color: #050505;
-}
-
-.quiet-peek-show:hover {
-  background: #d8dadf;
-}
-
-/* Shown posts (subtle indicator) */
-.quiet-shown {
-  border-left: 2px solid transparent !important;
-  transition: border-color 0.3s;
-}
 
 /* Profile page banner */
 .quiet-profile-banner,

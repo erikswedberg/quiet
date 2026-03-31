@@ -15,6 +15,8 @@
 
   let friendsList = new Set();        // Profile URL keys: "user:johndoe" or "profile:12345"
   let friendNames = new Map();        // Lowercase display name to profile URL key
+  let groupsList = new Set();         // Group URL keys: "group:12345" or "group:slug"
+  let groupNames = new Map();         // Lowercase display name to group URL key
   let enabled = true;                 // Whether filtering is active
   let mode = 'friends';               // 'friends' | 'groups' | 'off'
   let stats = {                       // Statistics
@@ -52,6 +54,16 @@
           friendNames = new Map(Object.entries(data.friendNames));
         }
         
+        // Load groups list
+        if (Array.isArray(data.groupsList)) {
+          groupsList = new Set(data.groupsList);
+        }
+        
+        // Load group names map
+        if (data.groupNames && typeof data.groupNames === 'object') {
+          groupNames = new Map(Object.entries(data.groupNames));
+        }
+        
         // Load enabled state
         if (typeof data.enabled === 'boolean') {
           enabled = data.enabled;
@@ -85,6 +97,8 @@
       const data = {
         friendsList: Array.from(friendsList),
         friendNames: Object.fromEntries(friendNames),
+        groupsList: Array.from(groupsList),
+        groupNames: Object.fromEntries(groupNames),
         enabled: enabled,
         mode: mode,
         savedPosts: savedPosts
@@ -282,13 +296,70 @@
   }
 
   /**
-   * Check if a post is from a group
-   * @param {Element} postEl - The post element
-   * @returns {boolean}
+   * Normalize a group URL to a storage key.
+   * Returns "group:ID" or "group:slug" or null.
    */
-  function isGroupPost(postEl) {
+  function normalizeGroupUrl(href) {
+    if (!href) return null;
+    try {
+      const url = new URL(href, 'https://www.facebook.com');
+      // /groups/SLUG/ or /groups/NUMERICID/
+      const match = url.pathname.match(/^\/groups\/([^/]+)/);
+      if (match && match[1] && match[1] !== 'feed' && match[1] !== 'joins' && match[1] !== 'discover') {
+        return `group:${match[1]}`;
+      }
+    } catch (e) {}
+    return null;
+  }
+
+  /**
+   * Check if a post is from a group the user has joined.
+   * Returns the group key if found, null otherwise.
+   */
+  function getPostGroupKey(postEl) {
     const groupLinks = postEl.querySelectorAll('a[href*="/groups/"]');
-    return groupLinks.length > 0;
+    for (const link of groupLinks) {
+      const key = normalizeGroupUrl(link.getAttribute('href'));
+      if (key && groupsList.has(key)) return key;
+    }
+    return null;
+  }
+
+  /**
+   * Search a post for any profile link that belongs to a friend.
+   * Used to detect friend shares/reposts where the avatar is the original author.
+   */
+  function findFriendInPost(postEl) {
+    const links = postEl.querySelectorAll('a[role="link"]');
+    for (const link of links) {
+      const href = link.getAttribute('href');
+      if (!href) continue;
+      const key = normalizeProfileUrl(href);
+      if (key && friendsList.has(key)) {
+        // Get the friend's display name from our stored names
+        let name = '';
+        for (const [n, u] of friendNames.entries()) {
+          if (u === key) { name = n; break; }
+        }
+        // Capitalize stored lowercase name
+        if (name) {
+          name = name.replace(/\b\w/g, c => c.toUpperCase());
+        }
+        return { url: key, name };
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Inject a small label at the top of a shared post showing who shared it.
+   */
+  function injectShareLabel(postEl, sharerName, originalAuthor) {
+    if (postEl.querySelector('.quiet-share-label')) return;
+    const label = document.createElement('div');
+    label.className = 'quiet-share-label';
+    label.textContent = sharerName + ' shared a post from ' + originalAuthor;
+    postEl.insertBefore(label, postEl.firstChild);
   }
 
   // ============================================================================
@@ -304,52 +375,7 @@
    * Inject a peek bar for a hidden post
    * @param {Element} postEl - The hidden post element
    */
-  function injectPeekBar(postEl, authorName, authorUrl) {
-    if (postEl.querySelector('.quiet-peek')) return;
 
-    const peekBar = document.createElement('div');
-    peekBar.className = 'quiet-peek';
-
-    const label = document.createElement('span');
-    label.className = 'quiet-peek-label';
-    label.textContent = 'Hidden:';
-
-    const authorSpan = document.createElement('span');
-    authorSpan.className = 'quiet-peek-author';
-    authorSpan.textContent = authorName || 'Unknown';
-
-    const addButton = document.createElement('button');
-    addButton.className = 'quiet-peek-add';
-    addButton.textContent = '+ Add';
-
-    const showButton = document.createElement('button');
-    showButton.className = 'quiet-peek-show';
-    showButton.textContent = 'Show once';
-
-    addButton.addEventListener('click', (e) => {
-      e.stopPropagation();
-      if (authorUrl) {
-        friendsList.add(authorUrl);
-        friendNames.set(authorName.toLowerCase(), authorUrl);
-        saveState();
-        showToast('Added ' + authorName);
-        reprocessAll();
-      }
-    });
-
-    showButton.addEventListener('click', (e) => {
-      e.stopPropagation();
-      postEl.classList.remove('quiet-hidden');
-      peekBar.remove();
-    });
-
-    peekBar.appendChild(label);
-    peekBar.appendChild(authorSpan);
-    if (authorUrl) peekBar.appendChild(addButton);
-    peekBar.appendChild(showButton);
-
-    postEl.insertBefore(peekBar, postEl.firstChild);
-  }
 
   // ============================================================================
   // FRIENDS PAGE IMPORT
@@ -440,6 +466,99 @@
       if (intervalCount >= maxIntervals) {
         clearInterval(importInterval);
         showToast('Import done. ' + friendsList.size + ' friends.');
+      }
+    }, 2000);
+  }
+
+  // ============================================================================
+  // GROUP IMPORT
+  // ============================================================================
+
+  /**
+   * Scan /groups/joins/ page for joined groups.
+   * Each group card has a link like /groups/SLUG/ or /groups/ID/
+   * and the group name as text.
+   */
+  function checkGroupsPage() {
+    if (!window.location.pathname.includes('/groups/joins')) {
+      return 0;
+    }
+
+    let count = 0;
+
+    // Group cards contain links to /groups/SLUG with "View group" button.
+    // Find all links that go to a specific group.
+    const links = document.querySelectorAll('a[href*="/groups/"]');
+
+    for (const link of links) {
+      const href = link.getAttribute('href');
+      const groupKey = normalizeGroupUrl(href);
+      if (!groupKey || groupsList.has(groupKey)) continue;
+
+      // The group name is typically in a nearby heading or strong text.
+      // Walk up to the card container and look for the name.
+      const card = link.closest('[role="listitem"]') || link.closest('div[class]');
+      if (!card) continue;
+
+      // Try to find the group name: look for spans with short text
+      // that aren't "View group" or "Last active" etc.
+      let name = '';
+      const spans = card.querySelectorAll('span');
+      for (const span of spans) {
+        const text = span.textContent.trim();
+        if (text.length >= 3 && text.length <= 120 &&
+            !text.startsWith('View group') &&
+            !text.startsWith('Last') &&
+            !text.startsWith('You last') &&
+            !text.includes('member') &&
+            !text.includes('post')) {
+          // Prefer the longest meaningful text (likely the full group name)
+          if (text.length > name.length) {
+            name = text;
+          }
+        }
+      }
+
+      if (!name || name.length < 3) continue;
+
+      groupsList.add(groupKey);
+      groupNames.set(name.toLowerCase(), groupKey);
+      count++;
+      console.log('[Quiet] Found group: ' + name + ' -> ' + groupKey);
+    }
+
+    if (count > 0) {
+      saveState();
+    }
+
+    return count;
+  }
+
+  /**
+   * Auto-import groups with scroll + progress updates
+   */
+  function autoImportGroupsFromPage() {
+    if (!window.location.pathname.includes('/groups/joins')) {
+      showToast('Please navigate to facebook.com/groups/joins first');
+      return;
+    }
+
+    showToast('Scanning for groups...');
+
+    let intervalCount = 0;
+    const maxIntervals = 30;
+
+    const importInterval = setInterval(() => {
+      const newCount = checkGroupsPage();
+      intervalCount++;
+
+      if (newCount > 0) {
+        showToast(groupsList.size + ' groups total. Keep scrolling.');
+      }
+
+      if (intervalCount >= maxIntervals) {
+        clearInterval(importInterval);
+        showToast('Import done. ' + groupsList.size + ' groups.');
       }
     }, 2000);
   }
@@ -725,6 +844,13 @@
           showToast(friendsList.size + ' friends total.');
         }
       }
+
+      if (window.location.pathname.includes('/groups/joins')) {
+        const found = checkGroupsPage();
+        if (found > 0) {
+          showToast(groupsList.size + ' groups total.');
+        }
+      }
     }, 3000);
   }
 
@@ -741,24 +867,32 @@
       stats.total++;
       
       const isFriend = friendsList.has(profileUrl);
+      const groupKey = getPostGroupKey(container);
       
-      if (mode === 'friends' && !isFriend) {
-        container.classList.add('quiet-hidden');
-        container.classList.remove('quiet-shown');
-        stats.hidden++;
-        injectPeekBar(container, authorName, profileUrl);
-      } else if (mode === 'groups' && !isGroupPost(container)) {
-        container.classList.add('quiet-hidden');
-        container.classList.remove('quiet-shown');
-        stats.hidden++;
-        injectPeekBar(container, authorName, profileUrl);
-      } else {
-        container.classList.add('quiet-shown');
-        container.classList.remove('quiet-hidden');
+      // Classify the post
+      container.classList.remove('quiet-friend', 'quiet-group', 'quiet-other');
+      if (isFriend) {
+        container.classList.add('quiet-friend');
         stats.shown++;
-        savePost(container, { name: authorName, profileUrl });
+        savePost(container, { name: authorName, profileUrl, type: 'friend' });
+      } else if (groupKey) {
+        container.classList.add('quiet-group');
+        stats.shown++;
+        savePost(container, { name: authorName, profileUrl, type: 'group', groupKey });
+      } else {
+        // Check if a friend shared this (friend's profile link somewhere in the post)
+        const sharer = findFriendInPost(container);
+        if (sharer) {
+          container.classList.add('quiet-friend');
+          stats.shown++;
+          injectShareLabel(container, sharer.name, authorName);
+          savePost(container, { name: sharer.name, profileUrl: sharer.url, type: 'friend' });
+        } else {
+          container.classList.add('quiet-other');
+          stats.hidden++;
+        }
       }
-      
+
       broadcastStats();
     }
   }
@@ -777,6 +911,7 @@
           sendResponse({
             stats: stats,
             friendsCount: friendsList.size,
+            groupsCount: groupsList.size,
             mode: mode,
             enabled: enabled
           });
@@ -792,7 +927,7 @@
         case 'quiet:setMode':
           mode = message.mode;
           saveState();
-          reprocessAll();
+          applyViewMode();
           sendResponse({ success: true });
           return true;
         
@@ -836,6 +971,11 @@
           sendResponse({ success: true });
           return true;
         
+        case 'quiet:importGroups':
+          autoImportGroupsFromPage();
+          sendResponse({ success: true });
+          return true;
+        
         case 'quiet:addFriend':
           const { name, url } = message;
           if (name && url) {
@@ -847,6 +987,18 @@
           } else {
             sendResponse({ success: false });
           }
+          return true;
+        
+        case 'quiet:getGroups':
+          const groupsArray = Array.from(groupsList).map(key => {
+            let gname = '';
+            for (const [n, k] of groupNames.entries()) {
+              if (k === key) { gname = n; break; }
+            }
+            return { key, name: gname };
+          });
+          groupsArray.sort((a, b) => a.name.localeCompare(b.name));
+          sendResponse({ groups: groupsArray });
           return true;
         
         default:
@@ -913,6 +1065,18 @@
   /**
    * Reprocess all posts (e.g., after settings change)
    */
+  /**
+   * Apply the current view mode to <body> so CSS handles visibility.
+   */
+  function applyViewMode() {
+    document.body.classList.remove('quiet-view-friends', 'quiet-view-groups', 'quiet-view-off');
+    if (enabled) {
+      document.body.classList.add('quiet-view-' + mode);
+    } else {
+      document.body.classList.add('quiet-view-off');
+    }
+  }
+
   function reprocessAll() {
     processedPosts = new WeakSet();
     stats.total = 0;
@@ -920,9 +1084,12 @@
     stats.hidden = 0;
 
     // Remove all peek bars and classes
-    document.querySelectorAll('.quiet-peek').forEach(p => p.remove());
-    document.querySelectorAll('.quiet-hidden').forEach(el => el.classList.remove('quiet-hidden'));
-    document.querySelectorAll('.quiet-shown').forEach(el => el.classList.remove('quiet-shown'));
+
+    document.querySelectorAll('.quiet-friend, .quiet-group, .quiet-other').forEach(el => {
+      el.classList.remove('quiet-friend', 'quiet-group', 'quiet-other');
+    });
+
+    applyViewMode();
 
     // Re-scan
     scanAndFilter();
@@ -948,6 +1115,9 @@
       savedPosts: savedPosts.length
     });
     
+    // Set view mode on body
+    applyViewMode();
+    
     // Initial scan
     scanAndFilter();
     
@@ -960,6 +1130,7 @@
     // Check if on profile or friends page
     checkProfilePage();
     checkFriendsPage();
+    checkGroupsPage();
     
     // Show activation toast
     showToast('Quiet is active.');

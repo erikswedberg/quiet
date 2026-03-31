@@ -11,8 +11,10 @@ const modeFriends = document.getElementById('modeFriends');
 const modeGroups = document.getElementById('modeGroups');
 const modeOff = document.getElementById('modeOff');
 const importFriendsBtn = document.getElementById('importFriendsBtn');
+const importGroupsBtn = document.getElementById('importGroupsBtn');
 const viewTimelineBtn = document.getElementById('viewTimelineBtn');
 const manageFriendsBtn = document.getElementById('manageFriendsBtn');
+const statGroups = document.getElementById('statGroups');
 const friendsListContainer = document.getElementById('friendsListContainer');
 const searchInput = document.getElementById('searchInput');
 const friendsListEl = document.getElementById('friendsList');
@@ -52,6 +54,7 @@ function updateStats(data) {
   statShown.textContent = s.shown ?? 0;
   statHidden.textContent = s.hidden ?? 0;
   statFriends.textContent = data.friendsCount ?? s.friendsCount ?? currentFriends.length;
+  if (data.groupsCount !== undefined) statGroups.textContent = data.groupsCount;
 }
 
 function updateStatus(on) {
@@ -149,6 +152,22 @@ importFriendsBtn.addEventListener('click', async () => {
   await sendToContent('quiet:importFriends');
   importFriendsBtn.textContent = 'Import Friends';
   await loadFriends();
+});
+
+importGroupsBtn.addEventListener('click', async () => {
+  const tab = await getFacebookTab();
+
+  if (!tab?.url?.includes('facebook.com/groups/joins')) {
+    await chrome.tabs.create({ url: 'https://www.facebook.com/groups/joins/?nav_source=tab' });
+    importGroupsBtn.textContent = 'Now scroll down, then click Import again';
+    return;
+  }
+
+  importGroupsBtn.textContent = 'Scanning...';
+  await sendToContent('quiet:importGroups');
+  importGroupsBtn.textContent = 'Import Groups';
+  const resp = await sendToContent('quiet:getStats');
+  if (resp) updateStats(resp);
 });
 
 viewTimelineBtn.addEventListener('click', () => {
