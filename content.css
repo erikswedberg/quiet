@@ -1,18 +1,22 @@
 /* Quiet - Facebook Feed Filtering Extension */
 
-/* ---- View mode: friends (default) ---- */
-body.quiet-view-friends .quiet-group,
-body.quiet-view-friends .quiet-other {
+/* Hide all posts by default until classified */
+body.quiet-active [data-virtualized="false"] {
   display: none !important;
 }
 
-/* ---- View mode: groups ---- */
-body.quiet-view-groups .quiet-friend,
-body.quiet-view-groups .quiet-other {
-  display: none !important;
+/* Show posts that pass the current view filter */
+body.quiet-view-friends .quiet-friend {
+  display: block !important;
+}
+body.quiet-view-groups .quiet-group {
+  display: block !important;
 }
 
-/* ---- View mode: off (show everything) ---- */
+/* Off mode: show everything */
+body.quiet-view-off [data-virtualized="false"] {
+  display: block !important;
+}
 
 /* Share label */
 .quiet-share-label {

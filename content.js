@@ -1078,10 +1078,12 @@
    * Apply the current view mode to <body> so CSS handles visibility.
    */
   function applyViewMode() {
+    document.body.classList.add('quiet-active');
     document.body.classList.remove('quiet-view-friends', 'quiet-view-groups', 'quiet-view-off');
     if (enabled) {
       document.body.classList.add('quiet-view-' + mode);
     } else {
+      document.body.classList.remove('quiet-active');
       document.body.classList.add('quiet-view-off');
     }
   }
