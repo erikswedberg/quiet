@@ -159,7 +159,7 @@
   }
 
   // ============================================================================
-  // AUTHOR EXTRACTION
+  // AUTHOR EXTRACTION (legacy, kept for savePost)
   // ============================================================================
 
   /**
@@ -282,31 +282,15 @@
    * @returns {boolean}
    */
   function isSponsored(postEl) {
-    // Check for "Sponsored" text
-    const links = postEl.querySelectorAll('a[href*="ads/about"]');
-    for (const link of links) {
-      if (link.textContent.trim() === 'Sponsored') {
-        return true;
-      }
+    // data-ad-rendering-role="cta-" is specific to ads (call to action button)
+    if (postEl.querySelector('[data-ad-rendering-role="cta-"]')) return true;
+    // Links to external sites via l.facebook.com redirect (ad click-throughs)
+    if (postEl.querySelector('a[href*="l.facebook.com/l.php"]')) return true;
+    // "Sponsored" text as a visible label
+    const spans = postEl.querySelectorAll('span, a');
+    for (const el of spans) {
+      if (el.textContent.trim() === 'Sponsored') return true;
     }
-    
-    const spans = postEl.querySelectorAll('span');
-    for (const span of spans) {
-      if (span.textContent.trim() === 'Sponsored') {
-        // Verify it's a small label
-        const rect = span.getBoundingClientRect();
-        if (rect.width < 300 && rect.height < 40) {
-          return true;
-        }
-      }
-    }
-    
-    // Check for ads link near timestamp
-    const adsLinks = postEl.querySelectorAll('a[href*="/ads/"]');
-    if (adsLinks.length > 0) {
-      return true;
-    }
-    
     return false;
   }
 
@@ -358,102 +342,6 @@
   // ============================================================================
 
   /**
-   * Determine if a post should be shown based on current filter settings
-   * @param {Element} postEl - The post element
-   * @returns {boolean} - True if post should be shown
-   */
-  function shouldShowPost(postEl) {
-    // If filtering is disabled, show everything
-    if (!enabled) {
-      return true;
-    }
-    
-    // Hide sponsored posts
-    if (isSponsored(postEl)) {
-      return false;
-    }
-    
-    // Hide suggested content
-    if (isSuggested(postEl)) {
-      return false;
-    }
-    
-    // Extract author
-    const author = extractAuthorInfo(postEl);
-    
-    // If we can't determine the author
-    if (!author) {
-      const textContent = postEl.textContent || '';
-      // If post has very little text, it's probably a structural element
-      if (textContent.length < 50) {
-        return true;
-      }
-      // Unknown author with content = hide
-      return false;
-    }
-    
-    // Mode-based filtering
-    if (mode === 'friends') {
-      return friendsList.has(author.profileUrl);
-    } else if (mode === 'groups') {
-      return isGroupPost(postEl);
-    } else if (mode === 'off') {
-      return true;
-    }
-    
-    return true;
-  }
-
-  // ============================================================================
-  // POST PROCESSING
-  // ============================================================================
-
-  /**
-   * Process a single post element
-   * @param {Element} postEl - The post element to process
-   */
-  function processPost(postEl) {
-    // Skip if already processed
-    if (processedPosts.has(postEl)) {
-      return;
-    }
-    
-    // Mark as processed
-    processedPosts.add(postEl);
-    stats.total++;
-    
-    // Determine if post should be shown
-    const show = shouldShowPost(postEl);
-    
-    if (show) {
-      postEl.classList.add('quiet-shown');
-      postEl.classList.remove('quiet-hidden');
-      stats.shown++;
-      
-      // Remove peek bar if it exists
-      const existingPeek = postEl.querySelector('.quiet-peek');
-      if (existingPeek) {
-        existingPeek.remove();
-      }
-    } else {
-      postEl.classList.add('quiet-hidden');
-      postEl.classList.remove('quiet-shown');
-      stats.hidden++;
-      
-      // Inject peek bar
-      injectPeekBar(postEl);
-    }
-    
-    // Try to save post data
-    const author = extractAuthorInfo(postEl);
-    if (author) {
-      savePost(postEl, author);
-    }
-    
-    // Broadcast updated stats
-    broadcastStats();
-  }
-
   // ============================================================================
   // PEEK BARS
   // ============================================================================
@@ -462,69 +350,50 @@
    * Inject a peek bar for a hidden post
    * @param {Element} postEl - The hidden post element
    */
-  function injectPeekBar(postEl) {
-    // Don't inject if one already exists
-    if (postEl.querySelector('.quiet-peek')) {
-      return;
-    }
-    
-    const author = extractAuthorInfo(postEl);
-    const authorName = author ? author.name : 'Unknown source';
-    const authorUrl = author ? author.profileUrl : null;
-    
-    // Create peek bar
+  function injectPeekBar(postEl, authorName, authorUrl) {
+    if (postEl.querySelector('.quiet-peek')) return;
+
     const peekBar = document.createElement('div');
     peekBar.className = 'quiet-peek';
-    
-    const icon = document.createElement('span');
-    icon.className = 'quiet-peek-icon';
-    icon.textContent = 'Quiet';
-    
+
     const label = document.createElement('span');
     label.className = 'quiet-peek-label';
     label.textContent = 'Hidden:';
-    
+
     const authorSpan = document.createElement('span');
     authorSpan.className = 'quiet-peek-author';
-    authorSpan.textContent = authorName;
-    
+    authorSpan.textContent = authorName || 'Unknown';
+
     const addButton = document.createElement('button');
     addButton.className = 'quiet-peek-add';
     addButton.textContent = '+ Add';
-    
+
     const showButton = document.createElement('button');
     showButton.className = 'quiet-peek-show';
     showButton.textContent = 'Show once';
-    
-    // Add button click handler
+
     addButton.addEventListener('click', (e) => {
       e.stopPropagation();
       if (authorUrl) {
         friendsList.add(authorUrl);
         friendNames.set(authorName.toLowerCase(), authorUrl);
         saveState();
-        showToast(`Added ${authorName} to friends list`);
+        showToast('Added ' + authorName);
         reprocessAll();
       }
     });
-    
-    // Show button click handler
+
     showButton.addEventListener('click', (e) => {
       e.stopPropagation();
       postEl.classList.remove('quiet-hidden');
       peekBar.remove();
     });
-    
-    // Assemble peek bar
-    peekBar.appendChild(icon);
+
     peekBar.appendChild(label);
     peekBar.appendChild(authorSpan);
-    if (authorUrl) {
-      peekBar.appendChild(addButton);
-    }
+    if (authorUrl) peekBar.appendChild(addButton);
     peekBar.appendChild(showButton);
-    
-    // Insert at the beginning of the post
+
     postEl.insertBefore(peekBar, postEl.firstChild);
   }
 
@@ -744,37 +613,88 @@
   }
 
   // ============================================================================
+  // POST DISCOVERY
+  // ============================================================================
+
+  // Facebook no longer uses [role="feed"]. Posts are virtualized divs.
+  // Each post has a profile avatar: svg[role="img"][aria-label="PersonName"]
+  // We find these, walk up to the post container, and process from there.
+
+  /**
+   * Find the post container element by walking up from an element inside it.
+   * The post boundary is the div with data-virtualized="false", or if not found,
+   * a high-level div that contains the Like/Comment/Share buttons.
+   */
+  function findPostContainer(el) {
+    let node = el;
+    // Walk up looking for data-virtualized or a reasonable boundary
+    while (node && node !== document.body) {
+      if (node.getAttribute && node.getAttribute('data-virtualized') === 'false') {
+        return node;
+      }
+      node = node.parentElement;
+    }
+    // Fallback: walk up from the avatar link to find a container that has
+    // Like/Comment/Share buttons, meaning it wraps a full post
+    node = el;
+    while (node && node !== document.body) {
+      if (node.querySelector && 
+          node.querySelector('[aria-label="Like"]') &&
+          node.querySelector('[aria-label="Leave a comment"]')) {
+        return node;
+      }
+      node = node.parentElement;
+    }
+    return null;
+  }
+
+  /**
+   * Scan the page for all posts by finding profile avatar SVGs.
+   * Returns an array of { container, authorName, profileUrl }.
+   */
+  function discoverPosts() {
+    const results = [];
+    // Find all profile avatar SVGs in posts
+    const avatars = document.querySelectorAll('svg[role="img"][aria-label]');
+    
+    for (const svg of avatars) {
+      const name = svg.getAttribute('aria-label');
+      if (!name || name.length < 2 || name.length > 80) continue;
+      
+      // The svg is inside an a[role="link"] that links to the profile
+      const link = svg.closest('a[role="link"]');
+      if (!link) continue;
+      
+      const href = link.getAttribute('href');
+      if (!href) continue;
+      
+      const profileUrl = normalizeProfileUrl(href);
+      if (!profileUrl) continue;
+      
+      // Find the post container
+      const container = findPostContainer(svg);
+      if (!container) continue;
+      
+      // Skip if already processed
+      if (processedPosts.has(container)) continue;
+      
+      results.push({ container, authorName: name, profileUrl });
+    }
+    
+    return results;
+  }
+
+  // ============================================================================
   // MUTATION OBSERVER
   // ============================================================================
 
-  /**
-   * Start observing the DOM for new posts
-   * @returns {MutationObserver}
-   */
   function startObserver() {
-    const obs = new MutationObserver((mutations) => {
-      for (const mutation of mutations) {
-        for (const node of mutation.addedNodes) {
-          if (node.nodeType !== Node.ELEMENT_NODE) continue;
-          
-          const element = node;
-          
-          // Check if parent is a feed
-          const parent = element.parentElement;
-          if (parent && parent.getAttribute('role') === 'feed') {
-            processPost(element);
-          }
-          
-          // Check if element contains a feed
-          const feeds = element.querySelectorAll('[role="feed"]');
-          for (const feed of feeds) {
-            const posts = feed.children;
-            for (const post of posts) {
-              processPost(post);
-            }
-          }
-        }
-      }
+    const obs = new MutationObserver(() => {
+      // Debounce: Facebook mutates DOM rapidly
+      clearTimeout(startObserver._timer);
+      startObserver._timer = setTimeout(() => {
+        scanAndFilter();
+      }, 500);
     });
     
     obs.observe(document.body, {
@@ -789,26 +709,11 @@
   // PERIODIC RECHECK
   // ============================================================================
 
-  /**
-   * Periodically check for new posts and profile pages
-   */
   function startPeriodicCheck() {
     setInterval(() => {
-      // Process any new posts in feeds
-      const feeds = document.querySelectorAll('[role="feed"]');
-      for (const feed of feeds) {
-        const posts = feed.children;
-        for (const post of posts) {
-          if (!processedPosts.has(post)) {
-            processPost(post);
-          }
-        }
-      }
-      
-      // Check if on profile or friends page
+      scanAndFilter();
       checkProfilePage();
 
-      // Auto-scan friends list page on scroll
       if (window.location.pathname.includes('/friends/list')) {
         const found = checkFriendsPage();
         if (found > 0) {
@@ -816,6 +721,48 @@
         }
       }
     }, 3000);
+  }
+
+  /**
+   * Main scan loop: discover posts, filter them.
+   */
+  function scanAndFilter() {
+    if (!enabled) return;
+    
+    const posts = discoverPosts();
+    
+    for (const { container, authorName, profileUrl } of posts) {
+      processedPosts.add(container);
+      stats.total++;
+      
+      const isFriend = friendsList.has(profileUrl);
+      const sponsored = isSponsored(container);
+      const suggested = isSuggested(container);
+      
+      if (sponsored || suggested) {
+        container.classList.add('quiet-hidden');
+        container.classList.remove('quiet-shown');
+        stats.hidden++;
+        injectPeekBar(container, 'Sponsored/Suggested', null);
+      } else if (mode === 'friends' && !isFriend) {
+        container.classList.add('quiet-hidden');
+        container.classList.remove('quiet-shown');
+        stats.hidden++;
+        injectPeekBar(container, authorName, profileUrl);
+      } else if (mode === 'groups' && !isGroupPost(container)) {
+        container.classList.add('quiet-hidden');
+        container.classList.remove('quiet-shown');
+        stats.hidden++;
+        injectPeekBar(container, authorName, profileUrl);
+      } else {
+        container.classList.add('quiet-shown');
+        container.classList.remove('quiet-hidden');
+        stats.shown++;
+        savePost(container, { name: authorName, profileUrl });
+      }
+      
+      broadcastStats();
+    }
   }
 
   // ============================================================================
@@ -969,27 +916,18 @@
    * Reprocess all posts (e.g., after settings change)
    */
   function reprocessAll() {
-    // Reset state
     processedPosts = new WeakSet();
     stats.total = 0;
     stats.shown = 0;
     stats.hidden = 0;
-    
-    // Remove all existing peek bars
-    const existingPeeks = document.querySelectorAll('.quiet-peek');
-    for (const peek of existingPeeks) {
-      peek.remove();
-    }
-    
-    // Get all posts and reprocess
-    const feeds = document.querySelectorAll('[role="feed"]');
-    for (const feed of feeds) {
-      const posts = feed.children;
-      for (const post of posts) {
-        post.classList.remove('quiet-shown', 'quiet-hidden');
-        processPost(post);
-      }
-    }
+
+    // Remove all peek bars and classes
+    document.querySelectorAll('.quiet-peek').forEach(p => p.remove());
+    document.querySelectorAll('.quiet-hidden').forEach(el => el.classList.remove('quiet-hidden'));
+    document.querySelectorAll('.quiet-shown').forEach(el => el.classList.remove('quiet-shown'));
+
+    // Re-scan
+    scanAndFilter();
   }
 
   // ============================================================================
@@ -1012,14 +950,8 @@
       savedPosts: savedPosts.length
     });
     
-    // Process existing posts
-    const feeds = document.querySelectorAll('[role="feed"]');
-    for (const feed of feeds) {
-      const posts = feed.children;
-      for (const post of posts) {
-        processPost(post);
-      }
-    }
+    // Initial scan
+    scanAndFilter();
     
     // Start observing for new posts
     observer = startObserver();
