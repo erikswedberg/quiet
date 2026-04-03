@@ -17,6 +17,7 @@ const importFriendsBtn = document.getElementById('importFriendsBtn');
 const importGroupsBtn = document.getElementById('importGroupsBtn');
 const viewTimelineBtn = document.getElementById('viewTimelineBtn');
 const manageFriendsBtn = document.getElementById('manageFriendsBtn');
+const clearAllBtn = document.getElementById('clearAllBtn');
 const friendsListContainer = document.getElementById('friendsListContainer');
 const searchInput = document.getElementById('searchInput');
 const friendsListEl = document.getElementById('friendsList');
@@ -207,6 +208,13 @@ viewTimelineBtn.addEventListener('click', () => {
 manageFriendsBtn.addEventListener('click', () => {
   const visible = friendsListContainer.classList.toggle('visible');
   if (visible) loadFriendsFromStorage();
+});
+
+clearAllBtn.addEventListener('click', async () => {
+  if (!confirm('Remove all friends? You can re-import from facebook.com/friends/list.')) return;
+  await sendToContent('quiet:clearFriends');
+  await loadFriendsFromStorage();
+  statFriends.textContent = '0';
 });
 
 searchInput.addEventListener('input', (e) => {

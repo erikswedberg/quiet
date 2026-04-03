@@ -213,6 +213,21 @@
       color: #888;
     }
 
+    .clear-all-btn {
+      background: transparent;
+      border: 1px solid #e94560;
+      color: #e94560;
+      padding: 3px 10px;
+      border-radius: 4px;
+      font-size: 11px;
+      cursor: pointer;
+    }
+
+    .clear-all-btn:hover {
+      background: #e94560;
+      color: white;
+    }
+
     .search-input {
       width: 100%;
       background: #0f3460;
@@ -343,6 +358,7 @@
     <div class="friends-header">
       <strong>Friends List</strong>
       <span class="friends-count" id="friendsCount">0 friends</span>
+      <button class="clear-all-btn" id="clearAllBtn">Clear All</button>
     </div>
     <input type="text" class="search-input" id="searchInput" placeholder="Search friends...">
     <div class="friends-list" id="friendsList">

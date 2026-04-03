@@ -31,6 +31,11 @@
   let observer = null;                // MutationObserver instance
   let saveStateTimeout = null;        // Debounce timer for saving state
 
+  // Resolves once loadState() finishes. Handlers that mutate state
+  // await this to avoid clobbering storage with empty data.
+  let resolveStateReady;
+  const stateReady = new Promise(r => { resolveStateReady = r; });
+
 
   // ============================================================================
   // STORAGE
@@ -84,6 +89,7 @@
       console.error('[Quiet] Failed to load state:', error);
     } finally {
       console.log('[Quiet] loadState complete. friends:', friendsList.size, 'groups:', groupsList.size);
+      resolveStateReady();
     }
   }
 
@@ -915,87 +921,93 @@
 
   /**
    * Handle messages from popup or background script.
-   * Synchronous responses — the popup reads list counts from
-   * chrome.storage.local directly, so these don't need to wait
-   * for loadState to finish.
+   * Read-only handlers respond synchronously.
+   * Mutation handlers await stateReady to avoid clobbering storage.
    */
-  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    try {
-      switch (message.type) {
-        case 'quiet:getStats':
-          sendResponse({
-            stats: stats,
-            friendsCount: friendsList.size,
-            groupsCount: groupsList.size,
-            mode: mode,
-            enabled: enabled
-          });
-          return;
+  async function handleMutation(message) {
+    await stateReady;
 
-        case 'quiet:setEnabled':
-          enabled = message.enabled;
-          saveState();
-          reprocessAll();
-          sendResponse({ success: true });
-          return;
+    switch (message.type) {
+      case 'quiet:setEnabled':
+        enabled = message.enabled;
+        saveState();
+        reprocessAll();
+        return { success: true };
 
-        case 'quiet:setMode':
-          mode = message.mode;
-          saveState();
-          applyViewMode();
-          sendResponse({ success: true });
-          return;
+      case 'quiet:setMode':
+        mode = message.mode;
+        saveState();
+        applyViewMode();
+        return { success: true };
 
-        case 'quiet:removeFriend': {
-          const urlToRemove = message.url;
-          friendsList.delete(urlToRemove);
-          for (const [name, url] of friendNames.entries()) {
-            if (url === urlToRemove) {
-              friendNames.delete(name);
-            }
+      case 'quiet:removeFriend': {
+        const urlToRemove = message.url;
+        friendsList.delete(urlToRemove);
+        for (const [name, url] of friendNames.entries()) {
+          if (url === urlToRemove) {
+            friendNames.delete(name);
           }
-          saveState();
-          reprocessAll();
-          sendResponse({ success: true });
-          return;
         }
-
-        case 'quiet:getSavedPosts':
-          sendResponse({ posts: savedPosts.slice(0, 200) });
-          return;
-
-        case 'quiet:importFriends':
-          autoImportFriendsFromPage();
-          sendResponse({ success: true });
-          return;
-
-        case 'quiet:importGroups':
-          autoImportGroupsFromPage();
-          sendResponse({ success: true });
-          return;
-
-        case 'quiet:addFriend': {
-          const { name, url } = message;
-          if (name && url) {
-            friendsList.add(url);
-            friendNames.set(name.toLowerCase(), url);
-            saveState();
-            reprocessAll();
-            sendResponse({ success: true });
-          } else {
-            sendResponse({ success: false });
-          }
-          return;
-        }
-
-        default:
-          sendResponse({ error: 'Unknown message type' });
-          return;
+        saveState();
+        reprocessAll();
+        return { success: true };
       }
-    } catch (error) {
-      console.error('[Quiet] Message handler error:', error);
-      sendResponse({ error: error.message });
+
+      case 'quiet:clearFriends':
+        friendsList.clear();
+        friendNames.clear();
+        saveState();
+        reprocessAll();
+        return { success: true };
+
+      case 'quiet:addFriend': {
+        const { name, url } = message;
+        if (name && url) {
+          friendsList.add(url);
+          friendNames.set(name.toLowerCase(), url);
+          saveState();
+          reprocessAll();
+          return { success: true };
+        }
+        return { success: false };
+      }
+
+      case 'quiet:importFriends':
+        autoImportFriendsFromPage();
+        return { success: true };
+
+      case 'quiet:importGroups':
+        autoImportGroupsFromPage();
+        return { success: true };
     }
+  }
+
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    // Read-only: respond synchronously
+    switch (message.type) {
+      case 'quiet:getStats':
+        sendResponse({
+          stats: stats,
+          friendsCount: friendsList.size,
+          groupsCount: groupsList.size,
+          mode: mode,
+          enabled: enabled
+        });
+        return;
+
+      case 'quiet:getSavedPosts':
+        sendResponse({ posts: savedPosts.slice(0, 200) });
+        return;
+    }
+
+    // Mutations: await stateReady, then respond
+    handleMutation(message)
+      .then(response => sendResponse(response || { error: 'Unknown message type' }))
+      .catch(err => {
+        console.error('[Quiet] Message handler error:', err);
+        sendResponse({ error: err.message });
+      });
+    return true; // Keep channel open for async response
   });
 
   // ============================================================================
