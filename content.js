@@ -31,11 +31,6 @@
   let observer = null;                // MutationObserver instance
   let saveStateTimeout = null;        // Debounce timer for saving state
 
-  // Promise that resolves once chrome.storage state is loaded.
-  // Message handlers await this before reading state so the popup
-  // never sees empty counts during the initial async load.
-  let resolveStateReady;
-  const stateReady = new Promise(r => { resolveStateReady = r; });
 
   // ============================================================================
   // STORAGE
@@ -88,8 +83,7 @@
     } catch (error) {
       console.error('[Quiet] Failed to load state:', error);
     } finally {
-      console.log('[Quiet] loadState complete, resolving stateReady. friends:', friendsList.size, 'groups:', groupsList.size);
-      resolveStateReady();
+      console.log('[Quiet] loadState complete. friends:', friendsList.size, 'groups:', groupsList.size);
     }
   }
 
@@ -921,113 +915,87 @@
 
   /**
    * Handle messages from popup or background script.
-   * Async handler awaits stateReady so the popup never sees
-   * empty counts while chrome.storage is still loading.
+   * Synchronous responses — the popup reads list counts from
+   * chrome.storage.local directly, so these don't need to wait
+   * for loadState to finish.
    */
-  async function handleMessage(message) {
-    console.log('[Quiet] handleMessage called:', message.type, 'stateReady resolved:', await Promise.race([stateReady.then(() => true), Promise.resolve(false)]));
-    await stateReady;
-    console.log('[Quiet] stateReady done, friendsList.size:', friendsList.size, 'groupsList.size:', groupsList.size);
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    try {
+      switch (message.type) {
+        case 'quiet:getStats':
+          sendResponse({
+            stats: stats,
+            friendsCount: friendsList.size,
+            groupsCount: groupsList.size,
+            mode: mode,
+            enabled: enabled
+          });
+          return;
 
-    switch (message.type) {
-      case 'quiet:getStats':
-        return {
-          stats: stats,
-          friendsCount: friendsList.size,
-          groupsCount: groupsList.size,
-          mode: mode,
-          enabled: enabled
-        };
-
-      case 'quiet:setEnabled':
-        enabled = message.enabled;
-        saveState();
-        reprocessAll();
-        return { success: true };
-
-      case 'quiet:setMode':
-        mode = message.mode;
-        saveState();
-        applyViewMode();
-        return { success: true };
-
-      case 'quiet:getFriends': {
-        const friendsArray = Array.from(friendsList).map(url => {
-          let name = '';
-          for (const [n, u] of friendNames.entries()) {
-            if (u === url) { name = n; break; }
-          }
-          return { url, name };
-        });
-        friendsArray.sort((a, b) => a.name.localeCompare(b.name));
-        return { friends: friendsArray };
-      }
-
-      case 'quiet:removeFriend': {
-        const urlToRemove = message.url;
-        friendsList.delete(urlToRemove);
-        for (const [name, url] of friendNames.entries()) {
-          if (url === urlToRemove) {
-            friendNames.delete(name);
-          }
-        }
-        saveState();
-        reprocessAll();
-        return { success: true };
-      }
-
-      case 'quiet:getSavedPosts':
-        return { posts: savedPosts.slice(0, 200) };
-
-      case 'quiet:importFriends':
-        autoImportFriendsFromPage();
-        return { success: true };
-
-      case 'quiet:importGroups':
-        autoImportGroupsFromPage();
-        return { success: true };
-
-      case 'quiet:addFriend': {
-        const { name, url } = message;
-        if (name && url) {
-          friendsList.add(url);
-          friendNames.set(name.toLowerCase(), url);
+        case 'quiet:setEnabled':
+          enabled = message.enabled;
           saveState();
           reprocessAll();
-          return { success: true };
-        }
-        return { success: false };
-      }
+          sendResponse({ success: true });
+          return;
 
-      case 'quiet:getGroups': {
-        const groupsArray = Array.from(groupsList).map(key => {
-          let gname = '';
-          for (const [n, k] of groupNames.entries()) {
-            if (k === key) { gname = n; break; }
+        case 'quiet:setMode':
+          mode = message.mode;
+          saveState();
+          applyViewMode();
+          sendResponse({ success: true });
+          return;
+
+        case 'quiet:removeFriend': {
+          const urlToRemove = message.url;
+          friendsList.delete(urlToRemove);
+          for (const [name, url] of friendNames.entries()) {
+            if (url === urlToRemove) {
+              friendNames.delete(name);
+            }
           }
-          return { key, name: gname };
-        });
-        groupsArray.sort((a, b) => a.name.localeCompare(b.name));
-        return { groups: groupsArray };
+          saveState();
+          reprocessAll();
+          sendResponse({ success: true });
+          return;
+        }
+
+        case 'quiet:getSavedPosts':
+          sendResponse({ posts: savedPosts.slice(0, 200) });
+          return;
+
+        case 'quiet:importFriends':
+          autoImportFriendsFromPage();
+          sendResponse({ success: true });
+          return;
+
+        case 'quiet:importGroups':
+          autoImportGroupsFromPage();
+          sendResponse({ success: true });
+          return;
+
+        case 'quiet:addFriend': {
+          const { name, url } = message;
+          if (name && url) {
+            friendsList.add(url);
+            friendNames.set(name.toLowerCase(), url);
+            saveState();
+            reprocessAll();
+            sendResponse({ success: true });
+          } else {
+            sendResponse({ success: false });
+          }
+          return;
+        }
+
+        default:
+          sendResponse({ error: 'Unknown message type' });
+          return;
       }
-
-      default:
-        return { error: 'Unknown message type' };
+    } catch (error) {
+      console.error('[Quiet] Message handler error:', error);
+      sendResponse({ error: error.message });
     }
-  }
-
-  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    console.log('[Quiet] onMessage received:', message.type);
-    handleMessage(message)
-      .then(response => {
-        console.log('[Quiet] Sending response for', message.type, ':', JSON.stringify(response).slice(0, 200));
-        sendResponse(response);
-      })
-      .catch(err => {
-        console.error('[Quiet] Message handler error:', err);
-        sendResponse({ error: err.message });
-      });
-    return true; // Keep message channel open for async response
   });
 
   // ============================================================================

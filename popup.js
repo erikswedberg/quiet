@@ -1,5 +1,7 @@
 // Quiet Popup Controller
 
+const STORAGE_KEY = 'quiet';
+
 // DOM Elements
 const toggleSwitch = document.getElementById('toggleSwitch');
 const statusDot = document.getElementById('statusDot');
@@ -7,6 +9,7 @@ const statusText = document.getElementById('statusText');
 const statShown = document.getElementById('statShown');
 const statHidden = document.getElementById('statHidden');
 const statFriends = document.getElementById('statFriends');
+const statGroups = document.getElementById('statGroups');
 const modeFriends = document.getElementById('modeFriends');
 const modeGroups = document.getElementById('modeGroups');
 const modeOff = document.getElementById('modeOff');
@@ -14,7 +17,6 @@ const importFriendsBtn = document.getElementById('importFriendsBtn');
 const importGroupsBtn = document.getElementById('importGroupsBtn');
 const viewTimelineBtn = document.getElementById('viewTimelineBtn');
 const manageFriendsBtn = document.getElementById('manageFriendsBtn');
-const statGroups = document.getElementById('statGroups');
 const friendsListContainer = document.getElementById('friendsListContainer');
 const searchInput = document.getElementById('searchInput');
 const friendsListEl = document.getElementById('friendsList');
@@ -25,7 +27,25 @@ let currentFriends = []; // Array of { name, url }
 let isEnabled = true;
 let currentMode = 'friends';
 
-//  Facebook tab communication 
+// ============================================================================
+// STORAGE (read directly, no content script needed)
+// ============================================================================
+
+async function loadStateFromStorage() {
+  try {
+    const result = await chrome.storage.local.get(STORAGE_KEY);
+    const data = result[STORAGE_KEY];
+    if (!data) return null;
+    return data;
+  } catch (err) {
+    console.warn('[Quiet popup] Failed to read storage:', err.message);
+    return null;
+  }
+}
+
+// ============================================================================
+// FACEBOOK TAB COMMUNICATION
+// ============================================================================
 
 async function getFacebookTab() {
   const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -36,32 +56,18 @@ async function getFacebookTab() {
 
 async function sendToContent(type, data = {}) {
   const tab = await getFacebookTab();
-  if (!tab) {
-    console.warn('[Quiet popup] No Facebook tab found for', type);
-    return null;
-  }
-  console.log('[Quiet popup] Sending', type, 'to tab', tab.id, tab.url?.slice(0, 60));
+  if (!tab) return null;
   try {
-    const response = await chrome.tabs.sendMessage(tab.id, { type, ...data });
-    console.log('[Quiet popup] Response for', type, ':', JSON.stringify(response).slice(0, 200));
-    return response;
+    return await chrome.tabs.sendMessage(tab.id, { type, ...data });
   } catch (err) {
     console.warn('[Quiet popup] sendMessage failed:', type, err.message);
     return null;
   }
 }
 
-//  UI update helpers 
-
-function updateStats(data) {
-  if (!data) return;
-  // Content script responds with { stats: {...}, friendsCount, mode, enabled }
-  const s = data.stats || data;
-  statShown.textContent = s.shown ?? 0;
-  statHidden.textContent = s.hidden ?? 0;
-  statFriends.textContent = data.friendsCount ?? s.friendsCount ?? currentFriends.length;
-  if (data.groupsCount !== undefined) statGroups.textContent = data.groupsCount;
-}
+// ============================================================================
+// UI UPDATE HELPERS
+// ============================================================================
 
 function updateStatus(on) {
   isEnabled = on;
@@ -77,7 +83,9 @@ function updateMode(m) {
   if (map[m]) map[m].classList.add('active');
 }
 
-//  Friends list rendering 
+// ============================================================================
+// FRIENDS LIST RENDERING
+// ============================================================================
 
 function renderFriendsList(filter = '') {
   const q = filter.toLowerCase();
@@ -103,7 +111,6 @@ function renderFriendsList(filter = '') {
 
     const nameEl = document.createElement('span');
     nameEl.className = 'friend-name';
-    // Capitalize stored lowercase name
     nameEl.textContent = friend.name.replace(/\b\w/g, c => c.toUpperCase());
 
     const removeBtn = document.createElement('button');
@@ -111,7 +118,7 @@ function renderFriendsList(filter = '') {
     removeBtn.textContent = 'x';
     removeBtn.addEventListener('click', async () => {
       await sendToContent('quiet:removeFriend', { url: friend.url });
-      await loadFriends();
+      await loadFriendsFromStorage();
     });
 
     item.appendChild(nameEl);
@@ -120,16 +127,32 @@ function renderFriendsList(filter = '') {
   }
 }
 
-async function loadFriends() {
-  const resp = await sendToContent('quiet:getFriends');
-  if (resp?.friends) {
-    currentFriends = resp.friends; // [{ name, url }]
-    renderFriendsList(searchInput.value);
-    statFriends.textContent = currentFriends.length;
+async function loadFriendsFromStorage() {
+  const data = await loadStateFromStorage();
+  if (!data) return;
+
+  const friendsList = Array.isArray(data.friendsList) ? data.friendsList : [];
+  const friendNames = (data.friendNames && typeof data.friendNames === 'object') ? data.friendNames : {};
+
+  // Build reverse map: url -> name
+  const urlToName = {};
+  for (const [name, url] of Object.entries(friendNames)) {
+    urlToName[url] = name;
   }
+
+  currentFriends = friendsList.map(url => ({
+    url,
+    name: urlToName[url] || ''
+  }));
+  currentFriends.sort((a, b) => a.name.localeCompare(b.name));
+
+  renderFriendsList(searchInput.value);
+  statFriends.textContent = currentFriends.length;
 }
 
-//  Event handlers 
+// ============================================================================
+// EVENT HANDLERS
+// ============================================================================
 
 toggleSwitch.addEventListener('click', async () => {
   const newState = !isEnabled;
@@ -157,7 +180,7 @@ importFriendsBtn.addEventListener('click', async () => {
   importFriendsBtn.textContent = 'Scanning...';
   await sendToContent('quiet:importFriends');
   importFriendsBtn.textContent = 'Import Friends';
-  await loadFriends();
+  await loadFriendsFromStorage();
 });
 
 importGroupsBtn.addEventListener('click', async () => {
@@ -172,8 +195,9 @@ importGroupsBtn.addEventListener('click', async () => {
   importGroupsBtn.textContent = 'Scanning...';
   await sendToContent('quiet:importGroups');
   importGroupsBtn.textContent = 'Import Groups';
-  const resp = await sendToContent('quiet:getStats');
-  if (resp) updateStats(resp);
+  // Re-read storage for updated group count
+  const data = await loadStateFromStorage();
+  if (data?.groupsList) statGroups.textContent = data.groupsList.length;
 });
 
 viewTimelineBtn.addEventListener('click', () => {
@@ -182,38 +206,49 @@ viewTimelineBtn.addEventListener('click', () => {
 
 manageFriendsBtn.addEventListener('click', () => {
   const visible = friendsListContainer.classList.toggle('visible');
-  if (visible) loadFriends();
+  if (visible) loadFriendsFromStorage();
 });
 
 searchInput.addEventListener('input', (e) => {
   renderFriendsList(e.target.value);
 });
 
-//  Real-time stats updates 
+// ============================================================================
+// REAL-TIME STATS UPDATES (from content script broadcasts)
+// ============================================================================
 
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg.type === 'quiet:stats') {
-    updateStats(msg);
+    statShown.textContent = msg.stats?.shown ?? 0;
+    statHidden.textContent = msg.stats?.hidden ?? 0;
   }
 });
 
-//  Init 
+// ============================================================================
+// INIT
+// ============================================================================
 
 async function init() {
-  console.log('[Quiet popup] init() starting');
-  // Try to get stats from the active Facebook tab
-  const resp = await sendToContent('quiet:getStats');
-  console.log('[Quiet popup] getStats response:', resp);
-  if (resp) {
-    updateStats(resp);
-    if (resp.enabled !== undefined) updateStatus(resp.enabled);
-    if (resp.mode) updateMode(resp.mode);
+  // 1. Read counts, mode, enabled from storage — instant, no content script needed
+  const data = await loadStateFromStorage();
+  if (data) {
+    const friendsCount = Array.isArray(data.friendsList) ? data.friendsList.length : 0;
+    const groupsCount = Array.isArray(data.groupsList) ? data.groupsList.length : 0;
+    statFriends.textContent = friendsCount;
+    statGroups.textContent = groupsCount;
+
+    if (typeof data.enabled === 'boolean') updateStatus(data.enabled);
+    if (typeof data.mode === 'string') updateMode(data.mode);
   }
 
-  console.log('[Quiet popup] calling loadFriends');
-  await loadFriends();
+  // 2. Try to get live shown/hidden counts from the content script (best-effort)
+  const resp = await sendToContent('quiet:getStats');
+  if (resp?.stats) {
+    statShown.textContent = resp.stats.shown ?? 0;
+    statHidden.textContent = resp.stats.hidden ?? 0;
+  }
 
-  // If no Facebook tab is open, show a hint
+  // 3. If no Facebook tab, show hint
   const tab = await getFacebookTab();
   if (!tab) {
     statusText.textContent = 'No Facebook tab';
