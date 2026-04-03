@@ -36,11 +36,17 @@ async function getFacebookTab() {
 
 async function sendToContent(type, data = {}) {
   const tab = await getFacebookTab();
-  if (!tab) return null;
+  if (!tab) {
+    console.warn('[Quiet popup] No Facebook tab found for', type);
+    return null;
+  }
+  console.log('[Quiet popup] Sending', type, 'to tab', tab.id, tab.url?.slice(0, 60));
   try {
-    return await chrome.tabs.sendMessage(tab.id, { type, ...data });
+    const response = await chrome.tabs.sendMessage(tab.id, { type, ...data });
+    console.log('[Quiet popup] Response for', type, ':', JSON.stringify(response).slice(0, 200));
+    return response;
   } catch (err) {
-    console.warn('[Quiet popup] sendMessage failed:', err.message);
+    console.warn('[Quiet popup] sendMessage failed:', type, err.message);
     return null;
   }
 }
@@ -194,14 +200,17 @@ chrome.runtime.onMessage.addListener((msg) => {
 //  Init 
 
 async function init() {
+  console.log('[Quiet popup] init() starting');
   // Try to get stats from the active Facebook tab
   const resp = await sendToContent('quiet:getStats');
+  console.log('[Quiet popup] getStats response:', resp);
   if (resp) {
     updateStats(resp);
     if (resp.enabled !== undefined) updateStatus(resp.enabled);
     if (resp.mode) updateMode(resp.mode);
   }
 
+  console.log('[Quiet popup] calling loadFriends');
   await loadFriends();
 
   // If no Facebook tab is open, show a hint

@@ -88,6 +88,7 @@
     } catch (error) {
       console.error('[Quiet] Failed to load state:', error);
     } finally {
+      console.log('[Quiet] loadState complete, resolving stateReady. friends:', friendsList.size, 'groups:', groupsList.size);
       resolveStateReady();
     }
   }
@@ -924,7 +925,9 @@
    * empty counts while chrome.storage is still loading.
    */
   async function handleMessage(message) {
+    console.log('[Quiet] handleMessage called:', message.type, 'stateReady resolved:', await Promise.race([stateReady.then(() => true), Promise.resolve(false)]));
     await stateReady;
+    console.log('[Quiet] stateReady done, friendsList.size:', friendsList.size, 'groupsList.size:', groupsList.size);
 
     switch (message.type) {
       case 'quiet:getStats':
@@ -1014,8 +1017,12 @@
   }
 
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    console.log('[Quiet] onMessage received:', message.type);
     handleMessage(message)
-      .then(sendResponse)
+      .then(response => {
+        console.log('[Quiet] Sending response for', message.type, ':', JSON.stringify(response).slice(0, 200));
+        sendResponse(response);
+      })
       .catch(err => {
         console.error('[Quiet] Message handler error:', err);
         sendResponse({ error: err.message });
