@@ -73,6 +73,10 @@ async function sendToContent(type, data = {}) {
 // UI UPDATE HELPERS
 // ============================================================================
 
+function updateImportBtnLabel(btn, base, count) {
+  btn.textContent = count > 0 ? `${base} (${count})` : base;
+}
+
 function updateStatus(on) {
   isEnabled = on;
   toggleSwitch.classList.toggle('active', on);
@@ -182,8 +186,9 @@ importFriendsBtn.addEventListener('click', async () => {
 
   importFriendsBtn.textContent = 'Scanning...';
   await sendToContent('quiet:importFriends');
-  importFriendsBtn.textContent = 'Import Friends';
   await loadFriendsFromStorage();
+  const d1 = await loadStateFromStorage();
+  updateImportBtnLabel(importFriendsBtn, 'Import Friends', d1?.friendsList?.length ?? 0);
 });
 
 importGroupsBtn.addEventListener('click', async () => {
@@ -197,10 +202,8 @@ importGroupsBtn.addEventListener('click', async () => {
 
   importGroupsBtn.textContent = 'Scanning...';
   await sendToContent('quiet:importGroups');
-  importGroupsBtn.textContent = 'Import Groups';
-  // Re-read storage for updated group count
-  const data = await loadStateFromStorage();
-  if (data?.groupsList) countGroups.textContent = data.groupsList.length + ' imported';
+  const d2 = await loadStateFromStorage();
+  updateImportBtnLabel(importGroupsBtn, 'Import Groups', d2?.groupsList?.length ?? 0);
 });
 
 viewTimelineBtn.addEventListener('click', () => {
@@ -216,7 +219,7 @@ clearAllBtn.addEventListener('click', async () => {
   if (!confirm('Remove all friends? You can re-import from facebook.com/friends/list.')) return;
   await sendToContent('quiet:clearList', { list: 'friends' });
   await loadFriendsFromStorage();
-  countFriends.textContent = '';
+  updateImportBtnLabel(importFriendsBtn, 'Import Friends', 0);
 });
 
 importPagesBtn.addEventListener('click', async () => {
@@ -230,9 +233,8 @@ importPagesBtn.addEventListener('click', async () => {
 
   importPagesBtn.textContent = 'Scanning...';
   await sendToContent('quiet:importPages');
-  importPagesBtn.textContent = 'Import Pages';
-  const data = await loadStateFromStorage();
-  if (data?.pagesList) countPages.textContent = data.pagesList.length + ' imported';
+  const d3 = await loadStateFromStorage();
+  updateImportBtnLabel(importPagesBtn, 'Import Pages', d3?.pagesList?.length ?? 0);
 });
 
 searchInput.addEventListener('input', (e) => {
@@ -273,9 +275,9 @@ async function init() {
     const friendsCount = Array.isArray(data.friendsList) ? data.friendsList.length : 0;
     const groupsCount = Array.isArray(data.groupsList) ? data.groupsList.length : 0;
     const pagesCount = Array.isArray(data.pagesList) ? data.pagesList.length : 0;
-    if (friendsCount > 0) countFriends.textContent = friendsCount + ' imported';
-    if (groupsCount > 0) countGroups.textContent = groupsCount + ' imported';
-    if (pagesCount > 0) countPages.textContent = pagesCount + ' imported';
+    updateImportBtnLabel(importFriendsBtn, 'Import Friends', friendsCount);
+    updateImportBtnLabel(importGroupsBtn, 'Import Groups', groupsCount);
+    updateImportBtnLabel(importPagesBtn, 'Import Pages', pagesCount);
 
     if (typeof data.enabled === 'boolean') updateStatus(data.enabled);
     if (typeof data.mode === 'string') updateMode(data.mode);
