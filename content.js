@@ -345,21 +345,27 @@
    * Used to detect friend shares/reposts where the avatar is the original author.
    */
   function findFriendInPost(postEl) {
+    // Only check the first few profile links near the top of the post
+    // to find a friend who shared/reposted content.
+    // Searching the entire post matches friends in comments, likes, etc.
     const links = postEl.querySelectorAll('a[role="link"]');
+    let checked = 0;
     for (const link of links) {
+      if (checked >= 5) break; // Only check first 5 links
       const href = link.getAttribute('href');
       if (!href) continue;
       const key = normalizeProfileUrl(href);
-      if (key && friendsList.has(key)) {
-        // Get the friend's display name from our stored names
+      if (!key) continue;
+      checked++;
+      if (friendsList.has(key)) {
         let name = '';
         for (const [n, u] of friendNames.entries()) {
           if (u === key) { name = n; break; }
         }
-        // Capitalize stored lowercase name
         if (name) {
           name = name.replace(/\b\w/g, c => c.toUpperCase());
         }
+        console.log('[Quiet] findFriendInPost matched:', name, key, 'linkText:', link.textContent.substring(0, 40));
         return { url: key, name };
       }
     }
