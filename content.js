@@ -21,10 +21,11 @@
   let pageNames = new Map();          // Lowercase display name to page URL key
   let enabled = true;                 // Whether filtering is active
   let mode = 'friends';               // 'friends' | 'groups' | 'pages' | 'blocked' | 'off'
-  let stats = {                       // Statistics
-    total: 0,
-    shown: 0,
-    hidden: 0
+  let stats = {                       // Per-category post counts
+    friends: 0,
+    groups: 0,
+    pages: 0,
+    blocked: 0
   };
   let processedPosts = new WeakSet(); // Track which posts we've already processed
   let savedPosts = [];                // Array of saved post objects
@@ -999,7 +1000,6 @@
     
     for (const { container, authorName, profileUrl } of posts) {
       processedPosts.add(container);
-      stats.total++;
       
       const isFriend = friendsList.has(profileUrl);
       const isPage = pagesList.has(profileUrl);
@@ -1009,30 +1009,26 @@
       container.classList.remove('quiet-friend', 'quiet-group', 'quiet-page', 'quiet-other');
       if (isFriend) {
         container.classList.add('quiet-friend');
-        stats.shown++;
-        console.log('[Quiet] Post:', authorName, '->', profileUrl, 'FRIEND');
+        stats.friends++;
         savePost(container, { name: authorName, profileUrl, type: 'friend' });
       } else if (isPage) {
         container.classList.add('quiet-page');
-        stats.shown++;
-        console.log('[Quiet] Post:', authorName, '->', profileUrl, 'PAGE');
+        stats.pages++;
         savePost(container, { name: authorName, profileUrl, type: 'page' });
       } else if (groupKey) {
         container.classList.add('quiet-group');
-        stats.shown++;
-        console.log('[Quiet] Post:', authorName, '->', profileUrl, 'GROUP', groupKey);
+        stats.groups++;
         savePost(container, { name: authorName, profileUrl, type: 'group', groupKey });
       } else {
-        // Check if a friend shared this (friend's profile link somewhere in the post)
         const sharer = findFriendInPost(container);
         if (sharer) {
           container.classList.add('quiet-friend');
-          stats.shown++;
+          stats.friends++;
           injectShareLabel(container, sharer.name, authorName);
           savePost(container, { name: sharer.name, profileUrl: sharer.url, type: 'friend' });
         } else {
           container.classList.add('quiet-other');
-          stats.hidden++;
+          stats.blocked++;
         }
       }
 
@@ -1229,9 +1225,10 @@
 
   function reprocessAll() {
     processedPosts = new WeakSet();
-    stats.total = 0;
-    stats.shown = 0;
-    stats.hidden = 0;
+    stats.friends = 0;
+    stats.groups = 0;
+    stats.pages = 0;
+    stats.blocked = 0;
 
     // Remove all peek bars and classes
 

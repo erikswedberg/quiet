@@ -6,11 +6,10 @@ const STORAGE_KEY = 'quiet';
 const toggleSwitch = document.getElementById('toggleSwitch');
 const statusDot = document.getElementById('statusDot');
 const statusText = document.getElementById('statusText');
-const statShown = document.getElementById('statShown');
-const statHidden = document.getElementById('statHidden');
-const statFriends = document.getElementById('statFriends');
-const statGroups = document.getElementById('statGroups');
-const statPages = document.getElementById('statPages');
+const countFriends = document.getElementById('countFriends');
+const countGroups = document.getElementById('countGroups');
+const countPages = document.getElementById('countPages');
+const countBlocked = document.getElementById('countBlocked');
 const modeFriends = document.getElementById('modeFriends');
 const modeGroups = document.getElementById('modeGroups');
 const modePages = document.getElementById('modePages');
@@ -152,7 +151,6 @@ async function loadFriendsFromStorage() {
   currentFriends.sort((a, b) => a.name.localeCompare(b.name));
 
   renderFriendsList(searchInput.value);
-  statFriends.textContent = currentFriends.length;
 }
 
 // ============================================================================
@@ -202,7 +200,7 @@ importGroupsBtn.addEventListener('click', async () => {
   importGroupsBtn.textContent = 'Import Groups';
   // Re-read storage for updated group count
   const data = await loadStateFromStorage();
-  if (data?.groupsList) statGroups.textContent = data.groupsList.length;
+  if (data?.groupsList) countGroups.textContent = data.groupsList.length + ' imported';
 });
 
 viewTimelineBtn.addEventListener('click', () => {
@@ -218,7 +216,7 @@ clearAllBtn.addEventListener('click', async () => {
   if (!confirm('Remove all friends? You can re-import from facebook.com/friends/list.')) return;
   await sendToContent('quiet:clearList', { list: 'friends' });
   await loadFriendsFromStorage();
-  statFriends.textContent = '0';
+  countFriends.textContent = '';
 });
 
 importPagesBtn.addEventListener('click', async () => {
@@ -234,7 +232,7 @@ importPagesBtn.addEventListener('click', async () => {
   await sendToContent('quiet:importPages');
   importPagesBtn.textContent = 'Import Pages';
   const data = await loadStateFromStorage();
-  if (data?.pagesList) statPages.textContent = data.pagesList.length;
+  if (data?.pagesList) countPages.textContent = data.pagesList.length + ' imported';
 });
 
 searchInput.addEventListener('input', (e) => {
@@ -247,10 +245,21 @@ searchInput.addEventListener('input', (e) => {
 
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg.type === 'quiet:stats') {
-    statShown.textContent = msg.stats?.shown ?? 0;
-    statHidden.textContent = msg.stats?.hidden ?? 0;
+    updatePostCounts(msg.stats);
   }
 });
+
+function updatePostCounts(stats) {
+  if (!stats) return;
+  const f = stats.friends ?? 0;
+  const g = stats.groups ?? 0;
+  const p = stats.pages ?? 0;
+  const b = stats.blocked ?? 0;
+  countFriends.textContent = f > 0 ? f + ' posts' : '';
+  countGroups.textContent = g > 0 ? g + ' posts' : '';
+  countPages.textContent = p > 0 ? p + ' posts' : '';
+  countBlocked.textContent = b > 0 ? b + ' blocked' : '';
+}
 
 // ============================================================================
 // INIT
@@ -260,22 +269,22 @@ async function init() {
   // 1. Read counts, mode, enabled from storage — instant, no content script needed
   const data = await loadStateFromStorage();
   if (data) {
+    // List counts shown in tab buttons when no post counts yet
     const friendsCount = Array.isArray(data.friendsList) ? data.friendsList.length : 0;
     const groupsCount = Array.isArray(data.groupsList) ? data.groupsList.length : 0;
     const pagesCount = Array.isArray(data.pagesList) ? data.pagesList.length : 0;
-    statFriends.textContent = friendsCount;
-    statGroups.textContent = groupsCount;
-    statPages.textContent = pagesCount;
+    if (friendsCount > 0) countFriends.textContent = friendsCount + ' imported';
+    if (groupsCount > 0) countGroups.textContent = groupsCount + ' imported';
+    if (pagesCount > 0) countPages.textContent = pagesCount + ' imported';
 
     if (typeof data.enabled === 'boolean') updateStatus(data.enabled);
     if (typeof data.mode === 'string') updateMode(data.mode);
   }
 
-  // 2. Try to get live shown/hidden counts from the content script (best-effort)
+  // 2. Try to get live post counts from the content script (best-effort)
   const resp = await sendToContent('quiet:getStats');
   if (resp?.stats) {
-    statShown.textContent = resp.stats.shown ?? 0;
-    statHidden.textContent = resp.stats.hidden ?? 0;
+    updatePostCounts(resp.stats);
   }
 
   // 3. If no Facebook tab, show hint
