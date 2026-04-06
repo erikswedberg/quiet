@@ -12,6 +12,14 @@ body.quiet-view-friends .quiet-friend {
 body.quiet-view-groups .quiet-group {
   display: block !important;
 }
+body.quiet-view-pages .quiet-page {
+  display: block !important;
+}
+
+/* Blocked mode: show only non-matched posts */
+body.quiet-view-blocked .quiet-other {
+  display: block !important;
+}
 
 /* Off mode: show everything */
 body.quiet-view-off [data-virtualized="false"] {

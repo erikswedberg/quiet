@@ -17,8 +17,10 @@
   let friendNames = new Map();        // Lowercase display name to profile URL key
   let groupsList = new Set();         // Group URL keys: "group:12345" or "group:slug"
   let groupNames = new Map();         // Lowercase display name to group URL key
+  let pagesList = new Set();          // Page URL keys: "user:pagename" or "profile:12345"
+  let pageNames = new Map();          // Lowercase display name to page URL key
   let enabled = true;                 // Whether filtering is active
-  let mode = 'friends';               // 'friends' | 'groups' | 'off'
+  let mode = 'friends';               // 'friends' | 'groups' | 'pages' | 'blocked' | 'off'
   let stats = {                       // Statistics
     total: 0,
     shown: 0,
@@ -70,6 +72,16 @@
           groupNames = new Map(Object.entries(data.groupNames));
         }
         
+        // Load pages list
+        if (Array.isArray(data.pagesList)) {
+          pagesList = new Set(data.pagesList);
+        }
+        
+        // Load page names map
+        if (data.pageNames && typeof data.pageNames === 'object') {
+          pageNames = new Map(Object.entries(data.pageNames));
+        }
+        
         // Load enabled state
         if (typeof data.enabled === 'boolean') {
           enabled = data.enabled;
@@ -88,7 +100,7 @@
     } catch (error) {
       console.error('[Quiet] Failed to load state:', error);
     } finally {
-      console.log('[Quiet] loadState complete. friends:', friendsList.size, 'groups:', groupsList.size);
+      console.log('[Quiet] loadState complete. friends:', friendsList.size, 'groups:', groupsList.size, 'pages:', pagesList.size);
       resolveStateReady();
     }
   }
@@ -108,6 +120,8 @@
         friendNames: Object.fromEntries(friendNames),
         groupsList: Array.from(groupsList),
         groupNames: Object.fromEntries(groupNames),
+        pagesList: Array.from(pagesList),
+        pageNames: Object.fromEntries(pageNames),
         enabled: enabled,
         mode: mode,
         savedPosts: savedPosts
@@ -600,6 +614,77 @@
   }
 
   // ============================================================================
+  // PAGE IMPORT
+  // ============================================================================
+
+  /**
+   * Scan /pages/?category=liked for followed pages.
+   */
+  function checkPagesPage() {
+    if (!window.location.pathname.startsWith('/pages')) return 0;
+    if (!window.location.search.includes('category=liked')) return 0;
+
+    let count = 0;
+    const links = document.querySelectorAll('a[role="link"]');
+
+    for (const link of links) {
+      const href = link.getAttribute('href');
+      if (!href) continue;
+      const key = normalizeProfileUrl(href);
+      if (!key || pagesList.has(key)) continue;
+
+      const text = link.textContent.trim();
+      if (!text || text.length < 2 || text.length > 120) continue;
+      // Skip non-name links
+      if (text === 'Following' || text === 'Sort' || text === 'See All' ||
+          text.startsWith('See All') || text.startsWith('Create') ||
+          text.startsWith('Previously') || text === 'Discover' ||
+          text === 'Followed Pages' || text === 'Invites') continue;
+
+      pagesList.add(key);
+      pageNames.set(text.toLowerCase(), key);
+      count++;
+      console.log('[Quiet] Found page: ' + text + ' -> ' + key);
+    }
+
+    if (count > 0) {
+      saveState();
+    }
+
+    return count;
+  }
+
+  /**
+   * Auto-import pages with scroll + progress updates
+   */
+  function autoImportPagesFromPage() {
+    if (!window.location.pathname.startsWith('/pages') ||
+        !window.location.search.includes('category=liked')) {
+      showToast('Please navigate to facebook.com/pages/?category=liked first');
+      return;
+    }
+
+    showToast('Scanning for pages...');
+
+    let intervalCount = 0;
+    const maxIntervals = 30;
+
+    const importInterval = setInterval(() => {
+      const newCount = checkPagesPage();
+      intervalCount++;
+
+      if (newCount > 0) {
+        showToast(pagesList.size + ' pages total. Keep scrolling.');
+      }
+
+      if (intervalCount >= maxIntervals) {
+        clearInterval(importInterval);
+        showToast('Import done. ' + pagesList.size + ' pages.');
+      }
+    }, 2000);
+  }
+
+  // ============================================================================
   // PROFILE PAGE DETECTION
   // ============================================================================
 
@@ -893,6 +978,14 @@
           showToast(groupsList.size + ' groups total.');
         }
       }
+
+      if (window.location.pathname.startsWith('/pages') &&
+          window.location.search.includes('category=liked')) {
+        const found = checkPagesPage();
+        if (found > 0) {
+          showToast(pagesList.size + ' pages total.');
+        }
+      }
     }, 3000);
   }
 
@@ -909,19 +1002,25 @@
       stats.total++;
       
       const isFriend = friendsList.has(profileUrl);
+      const isPage = pagesList.has(profileUrl);
       const groupKey = getPostGroupKey(container);
       
       // Classify the post
-      container.classList.remove('quiet-friend', 'quiet-group', 'quiet-other');
+      container.classList.remove('quiet-friend', 'quiet-group', 'quiet-page', 'quiet-other');
       if (isFriend) {
         container.classList.add('quiet-friend');
         stats.shown++;
         console.log('[Quiet] Post:', authorName, '->', profileUrl, 'FRIEND');
         savePost(container, { name: authorName, profileUrl, type: 'friend' });
+      } else if (isPage) {
+        container.classList.add('quiet-page');
+        stats.shown++;
+        console.log('[Quiet] Post:', authorName, '->', profileUrl, 'PAGE');
+        savePost(container, { name: authorName, profileUrl, type: 'page' });
       } else if (groupKey) {
         container.classList.add('quiet-group');
         stats.shown++;
-        console.log('[Quiet] Post:', authorName, '->', profileUrl, 'GROUP', groupKey, 'display:', window.getComputedStyle(container).display);
+        console.log('[Quiet] Post:', authorName, '->', profileUrl, 'GROUP', groupKey);
         savePost(container, { name: authorName, profileUrl, type: 'group', groupKey });
       } else {
         // Check if a friend shared this (friend's profile link somewhere in the post)
@@ -934,7 +1033,6 @@
         } else {
           container.classList.add('quiet-other');
           stats.hidden++;
-          console.log('[Quiet] Post:', authorName, '->', profileUrl, 'OTHER');
         }
       }
 
@@ -980,13 +1078,6 @@
         return { success: true };
       }
 
-      case 'quiet:clearFriends':
-        friendsList.clear();
-        friendNames.clear();
-        saveState();
-        reprocessAll();
-        return { success: true };
-
       case 'quiet:addFriend': {
         const { name, url } = message;
         if (name && url) {
@@ -1006,6 +1097,37 @@
       case 'quiet:importGroups':
         autoImportGroupsFromPage();
         return { success: true };
+
+      case 'quiet:importPages':
+        autoImportPagesFromPage();
+        return { success: true };
+
+      case 'quiet:clearList': {
+        const list = message.list;
+        if (list === 'friends') { friendsList.clear(); friendNames.clear(); }
+        else if (list === 'groups') { groupsList.clear(); groupNames.clear(); }
+        else if (list === 'pages') { pagesList.clear(); pageNames.clear(); }
+        saveState();
+        reprocessAll();
+        return { success: true };
+      }
+
+      case 'quiet:removeItem': {
+        const { list: rList, key: rKey } = message;
+        if (rList === 'friends') {
+          friendsList.delete(rKey);
+          for (const [n, u] of friendNames.entries()) { if (u === rKey) { friendNames.delete(n); break; } }
+        } else if (rList === 'groups') {
+          groupsList.delete(rKey);
+          for (const [n, k] of groupNames.entries()) { if (k === rKey) { groupNames.delete(n); break; } }
+        } else if (rList === 'pages') {
+          pagesList.delete(rKey);
+          for (const [n, k] of pageNames.entries()) { if (k === rKey) { pageNames.delete(n); break; } }
+        }
+        saveState();
+        reprocessAll();
+        return { success: true };
+      }
     }
   }
 
@@ -1017,6 +1139,7 @@
           stats: stats,
           friendsCount: friendsList.size,
           groupsCount: groupsList.size,
+          pagesCount: pagesList.size,
           mode: mode,
           enabled: enabled
         });
@@ -1095,7 +1218,7 @@
    */
   function applyViewMode() {
     document.body.classList.add('quiet-active');
-    document.body.classList.remove('quiet-view-friends', 'quiet-view-groups', 'quiet-view-off');
+    document.body.classList.remove('quiet-view-friends', 'quiet-view-groups', 'quiet-view-pages', 'quiet-view-blocked', 'quiet-view-off');
     if (enabled) {
       document.body.classList.add('quiet-view-' + mode);
     } else {
@@ -1112,8 +1235,8 @@
 
     // Remove all peek bars and classes
 
-    document.querySelectorAll('.quiet-friend, .quiet-group, .quiet-other').forEach(el => {
-      el.classList.remove('quiet-friend', 'quiet-group', 'quiet-other');
+    document.querySelectorAll('.quiet-friend, .quiet-group, .quiet-page, .quiet-other').forEach(el => {
+      el.classList.remove('quiet-friend', 'quiet-group', 'quiet-page', 'quiet-other');
     });
 
     applyViewMode();
@@ -1158,6 +1281,7 @@
     checkProfilePage();
     checkFriendsPage();
     checkGroupsPage();
+    checkPagesPage();
     
     // Show activation toast
     showToast('Quiet is active.');

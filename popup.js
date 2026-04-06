@@ -10,11 +10,15 @@ const statShown = document.getElementById('statShown');
 const statHidden = document.getElementById('statHidden');
 const statFriends = document.getElementById('statFriends');
 const statGroups = document.getElementById('statGroups');
+const statPages = document.getElementById('statPages');
 const modeFriends = document.getElementById('modeFriends');
 const modeGroups = document.getElementById('modeGroups');
+const modePages = document.getElementById('modePages');
+const modeBlocked = document.getElementById('modeBlocked');
 const modeOff = document.getElementById('modeOff');
 const importFriendsBtn = document.getElementById('importFriendsBtn');
 const importGroupsBtn = document.getElementById('importGroupsBtn');
+const importPagesBtn = document.getElementById('importPagesBtn');
 const viewTimelineBtn = document.getElementById('viewTimelineBtn');
 const manageFriendsBtn = document.getElementById('manageFriendsBtn');
 const clearAllBtn = document.getElementById('clearAllBtn');
@@ -79,8 +83,8 @@ function updateStatus(on) {
 
 function updateMode(m) {
   currentMode = m;
-  [modeFriends, modeGroups, modeOff].forEach(btn => btn.classList.remove('active'));
-  const map = { friends: modeFriends, groups: modeGroups, off: modeOff };
+  [modeFriends, modeGroups, modePages, modeBlocked, modeOff].forEach(btn => btn.classList.remove('active'));
+  const map = { friends: modeFriends, groups: modeGroups, pages: modePages, blocked: modeBlocked, off: modeOff };
   if (map[m]) map[m].classList.add('active');
 }
 
@@ -161,7 +165,7 @@ toggleSwitch.addEventListener('click', async () => {
   await sendToContent('quiet:setEnabled', { enabled: newState });
 });
 
-[modeFriends, modeGroups, modeOff].forEach(btn => {
+[modeFriends, modeGroups, modePages, modeBlocked, modeOff].forEach(btn => {
   btn.addEventListener('click', async () => {
     const m = btn.dataset.mode;
     updateMode(m);
@@ -212,9 +216,25 @@ manageFriendsBtn.addEventListener('click', () => {
 
 clearAllBtn.addEventListener('click', async () => {
   if (!confirm('Remove all friends? You can re-import from facebook.com/friends/list.')) return;
-  await sendToContent('quiet:clearFriends');
+  await sendToContent('quiet:clearList', { list: 'friends' });
   await loadFriendsFromStorage();
   statFriends.textContent = '0';
+});
+
+importPagesBtn.addEventListener('click', async () => {
+  const tab = await getFacebookTab();
+
+  if (!tab?.url?.includes('facebook.com/pages') || !tab?.url?.includes('category=liked')) {
+    await chrome.tabs.create({ url: 'https://www.facebook.com/pages/?category=liked&ref=bookmarks' });
+    importPagesBtn.textContent = 'Now scroll down, then click Import again';
+    return;
+  }
+
+  importPagesBtn.textContent = 'Scanning...';
+  await sendToContent('quiet:importPages');
+  importPagesBtn.textContent = 'Import Pages';
+  const data = await loadStateFromStorage();
+  if (data?.pagesList) statPages.textContent = data.pagesList.length;
 });
 
 searchInput.addEventListener('input', (e) => {
@@ -242,8 +262,10 @@ async function init() {
   if (data) {
     const friendsCount = Array.isArray(data.friendsList) ? data.friendsList.length : 0;
     const groupsCount = Array.isArray(data.groupsList) ? data.groupsList.length : 0;
+    const pagesCount = Array.isArray(data.pagesList) ? data.pagesList.length : 0;
     statFriends.textContent = friendsCount;
     statGroups.textContent = groupsCount;
+    statPages.textContent = pagesCount;
 
     if (typeof data.enabled === 'boolean') updateStatus(data.enabled);
     if (typeof data.mode === 'string') updateMode(data.mode);
