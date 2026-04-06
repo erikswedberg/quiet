@@ -163,6 +163,12 @@
         }
       }
       
+      // Handle /groups/GROUPID/user/USERID/ format (group post avatar links)
+      const groupUserMatch = url.pathname.match(/^\/groups\/[^/]+\/user\/(\d+)/);
+      if (groupUserMatch) {
+        return `profile:${groupUserMatch[1]}`;
+      }
+
       // Skip certain paths that aren't profiles
       const skipPaths = [
         '/watch', '/marketplace', '/groups', '/events',
@@ -827,13 +833,12 @@
       
       if (!profileUrl) {
         console.log('[Quiet] No profileUrl for:', name, href.substring(0, 60));
-        continue;
       }
       
       // Skip if already processed
       if (processedPosts.has(container)) continue;
       
-      results.push({ container, authorName: name, profileUrl });
+      results.push({ container, authorName: name, profileUrl: profileUrl || '' });
     }
     
     return results;
