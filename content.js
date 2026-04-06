@@ -833,8 +833,6 @@
       // Skip if already processed
       if (processedPosts.has(container)) continue;
       
-      const isFriend = friendsList.has(profileUrl);
-      console.log('[Quiet] Post:', name, '->', profileUrl, isFriend ? 'FRIEND' : 'not friend');
       results.push({ container, authorName: name, profileUrl });
     }
     
@@ -907,10 +905,12 @@
       if (isFriend) {
         container.classList.add('quiet-friend');
         stats.shown++;
+        console.log('[Quiet] Post:', authorName, '->', profileUrl, 'FRIEND');
         savePost(container, { name: authorName, profileUrl, type: 'friend' });
       } else if (groupKey) {
         container.classList.add('quiet-group');
         stats.shown++;
+        console.log('[Quiet] Post:', authorName, '->', profileUrl, 'GROUP', groupKey, 'display:', window.getComputedStyle(container).display);
         savePost(container, { name: authorName, profileUrl, type: 'group', groupKey });
       } else {
         // Check if a friend shared this (friend's profile link somewhere in the post)
@@ -923,6 +923,7 @@
         } else {
           container.classList.add('quiet-other');
           stats.hidden++;
+          console.log('[Quiet] Post:', authorName, '->', profileUrl, 'OTHER');
         }
       }
 
