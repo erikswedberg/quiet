@@ -365,9 +365,24 @@
    */
   function injectShareLabel(postEl, sharerName, originalAuthor) {
     if (postEl.querySelector('.quiet-share-label')) return;
+
+    postEl.classList.add('quiet-shared', 'quiet-collapsed');
+
     const label = document.createElement('div');
     label.className = 'quiet-share-label';
     label.textContent = sharerName + ' shared a post from ' + originalAuthor;
+    label.addEventListener('click', () => {
+      postEl.classList.remove('quiet-collapsed');
+    });
+
+    const collapseBtn = document.createElement('div');
+    collapseBtn.className = 'quiet-collapse-btn';
+    collapseBtn.textContent = '\u2039 Collapse';
+    collapseBtn.addEventListener('click', () => {
+      postEl.classList.add('quiet-collapsed');
+    });
+
+    postEl.insertBefore(collapseBtn, postEl.firstChild);
     postEl.insertBefore(label, postEl.firstChild);
   }
 
